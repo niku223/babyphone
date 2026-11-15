@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Babyphone">
+<meta name="theme-color" content="#0e1116">
+<title>Babyphone</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#171b22; --line:#262c36; --text:#e8ebf0; --mute:#8b94a3;
+    --ok:#3ecf8e; --warn:#f5b84b; --bad:#ff5d5d; --accent:#7aa2ff;
+    --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;overscroll-behavior:none}
+  .screen{display:none;min-height:100%;padding:calc(var(--st) + 16px) 16px calc(var(--sb) + 16px)}
+  .screen.on{display:flex;flex-direction:column;gap:14px}
+  h1{font-size:28px;margin:8px 0 0}
+  .sub{color:var(--mute);margin:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}
+  label{font-size:13px;color:var(--mute);display:block;margin-bottom:6px}
+  .row{display:flex;gap:10px;align-items:center}
+  input[type=text]{flex:1;min-width:0;font:600 24px/1 ui-monospace,Menlo,monospace;letter-spacing:4px;text-transform:uppercase;
+    background:#0b0e13;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px}
+  button{font:600 16px/1 inherit;font-family:inherit;color:var(--text);background:#232a35;border:1px solid var(--line);
+    border-radius:12px;padding:14px 16px;cursor:pointer}
+  button:active{transform:scale(.98)}
+  button.big{width:100%;padding:20px;font-size:19px;text-align:left;display:flex;gap:14px;align-items:center}
+  button.big small{display:block;font-weight:400;font-size:14px;color:var(--mute);margin-top:4px}
+  button.primary{background:var(--accent);color:#0b1020;border-color:transparent}
+  button.on{background:var(--ok);color:#06140d;border-color:transparent}
+  .emoji{font-size:30px}
+  .err{background:#3a1414;border:1px solid #6b2323;color:#ffd0d0;border-radius:12px;padding:12px;display:none}
+  .hint{font-size:13px;color:var(--mute)}
+  .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:rgba(0,0,0,.55);
+    font-size:14px;font-weight:600;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--mute)}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+  .meter{position:relative;height:14px;border-radius:7px;background:#0b0e13;border:1px solid var(--line);overflow:hidden}
+  .meter>i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--ok),var(--warn) 70%,var(--bad));transition:width .2s}
+  .meter>b{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;opacity:.8}
+  /* Kamera */
+  #localVideo{width:100%;max-height:40vh;object-fit:cover;border-radius:16px;background:#000}
+  .code{font:700 40px/1 ui-monospace,Menlo,monospace;letter-spacing:6px;text-align:center;padding:6px 0}
+  #night{position:fixed;inset:0;background:#000;display:none;z-index:50;color:#333;align-items:flex-end;justify-content:center;
+    padding-bottom:calc(var(--sb) + 30px);font-size:13px}
+  #night.on{display:flex}
+  /* Monitor */
+  #mon.on{padding:0;gap:0}
+  #stage{position:relative;flex:1;background:#000;min-height:55vh}
+  #remoteVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+  #monTop{position:absolute;top:calc(var(--st) + 10px);left:10px;right:10px;display:flex;justify-content:space-between;gap:8px;z-index:2}
+  #monPanel{padding:14px 16px calc(var(--sb) + 14px);background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+  #flash{position:absolute;inset:0;border:6px solid var(--warn);opacity:0;pointer-events:none;transition:opacity .3s;z-index:1}
+  #flash.on{opacity:1}
+  #lostBanner{display:none;position:absolute;left:10px;right:10px;bottom:10px;z-index:3;background:var(--bad);color:#fff;
+    font-weight:700;padding:14px;border-radius:12px;text-align:center;animation:pulse 1s infinite}
+  body.lost #lostBanner{display:block}
+  @keyframes pulse{50%{opacity:.6}}
+  #tapSound{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none}
+  #tapSound span{background:rgba(0,0,0,.6);padding:10px 14px;border-radius:12px;font-size:14px}
+  input[type=range]{width:100%}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+</style>
+</head>
+<body>
+
+<!-- START -->
+<section id="home" class="screen on">
+  <h1>👶 Babyphone</h1>
+  <p class="sub">Ein iPhone filmt, das andere schaut zu – Bild und Ton laufen nur über dein WLAN.</p>
+  <div id="homeErr" class="err"></div>
+
+  <div class="card">
+    <label for="code">Raum-Code (auf beiden Geräten gleich)</label>
+    <div class="row">
+      <input id="code" type="text" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <button id="newCode" title="Neuen Code erzeugen">↻</button>
+    </div>
+  </div>
+
+  <button class="big" id="goCam"><span class="emoji">📷</span><span>Kamera<small>Dieses Gerät steht beim Baby</small></span></button>
+  <button class="big" id="goMon"><span class="emoji">📺</span><span>Monitor<small>Dieses Gerät ist bei dir</small></span></button>
+
+  <p class="hint">Wichtig: Beide Geräte müssen im selben WLAN sein. Auf beiden die Automatische Sperre auf „Nie“ stellen
+    (Einstellungen → Anzeige &amp; Helligkeit) und Safari im Vordergrund lassen. Ein gesperrter Bildschirm unterbricht die Übertragung.</p>
+</section>
+
+<!-- KAMERA -->
+<section id="cam" class="screen">
+  <div class="row" style="justify-content:space-between">
+    <span class="pill"><span id="camDot" class="dot"></span><span id="camStatus">Startet…</span></span>
+    <span class="pill">📺 <span id="camCount">0</span></span>
+  </div>
+  <video id="localVideo" playsinline autoplay muted></video>
+  <div class="card">
+    <label>Raum-Code – am Monitor eingeben</label>
+    <div class="code" id="camCode"></div>
+  </div>
+  <div class="card">
+    <label>Mikrofon-Pegel</label>
+    <div class="meter"><i id="camMeter"></i></div>
+  </div>
+  <div class="grid2">
+    <button id="flip">🔄 Kamera wechseln</button>
+    <button id="nightBtn">🌙 Nachtmodus</button>
+  </div>
+  <button id="camStop">Beenden</button>
+  <p class="hint" id="awakeHint">Bildschirm bleibt nur an, wenn die Automatische Sperre auf „Nie“ steht. Am besten ans Ladekabel.</p>
+</section>
+<div id="night">Tippen zum Aufwecken – Übertragung läuft weiter</div>
+
+<!-- MONITOR -->
+<section id="mon" class="screen">
+  <div id="stage">
+    <video id="remoteVideo" playsinline autoplay muted></video>
+    <div id="flash"></div>
+    <div id="tapSound"><span>🔇 Ton ist aus – unten „Ton an“ tippen</span></div>
+    <div id="monTop">
+      <span class="pill"><span id="monDot" class="dot"></span><span id="monStatus">Startet…</span></span>
+      <span class="pill" id="monCode"></span>
+    </div>
+    <div id="lostBanner">⚠️ Verbindung zur Kamera verloren</div>
+  </div>
+  <div id="monPanel">
+    <div>
+      <div class="row" style="justify-content:space-between;margin-bottom:6px">
+        <label style="margin:0">Geräuschpegel</label>
+        <span class="hint" id="lastNoise">Letztes Geräusch: –</span>
+      </div>
+      <div class="meter"><i id="monMeter"></i><b id="thrMark"></b></div>
+    </div>
+    <div>
+      <label for="thr">Alarm-Schwelle: <span id="thrVal"></span></label>
+      <input id="thr" type="range" min="10" max="95" step="1">
+    </div>
+    <div class="grid2">
+      <button id="soundBtn">🔇 Ton an</button>
+      <button id="alarmBtn">🔔 Alarm-Ton</button>
+    </div>
+    <button id="monStop">Beenden</button>
+  </div>
+</section>
+
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const PREFIX = 'nbphone-lan-v1-';
+  // Keine STUN/TURN-Server: Verbindung klappt nur im selben Netz – Bild & Ton verlassen das WLAN nicht.
+  const PEER_OPTS = { debug: 1, config: { iceServers: [] } };
+  const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+  const store = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const load = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const genCode = (n = 6) => { const a = new Uint32Array(n); crypto.getRandomValues(a); return Array.from(a, x => ALPH[x % ALPH.length]).join(''); };
+  const norm = s => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+  let role = null, peer = null, audioCtx = null, wakeLock = null;
+
+  function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); }
+  function setStatus(dotId, txtId, text, cls) { $(txtId).textContent = text; $(dotId).className = 'dot ' + (cls || ''); }
+  function homeError(msg) { const e = $('homeErr'); e.innerHTML = msg; e.style.display = 'block'; }
+
+  function makeAudioCtx() {
+    try {
+      if ('audioSession' in navigator) navigator.audioSession.type = 'playback'; // ignoriert Stummschalter (Safari 16.4+)
+    } catch (e) {}
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      audioCtx.resume();
+    } catch (e) { audioCtx = null; }
+  }
+
+  async function keepAwake() {
+    try {
+      if ('wakeLock' in navigator && document.visibilityState === 'visible') {
+        wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } catch (e) { wakeLock = null; }
+  }
+
+  // ---------- Startseite ----------
+  $('code').value = load('bp_code') || genCode();
+  $('newCode').onclick = () => { $('code').value = genCode(); };
+
+  if (!window.isSecureContext) {
+    homeError('Diese Seite muss über <b>https://</b> geöffnet werden – sonst blockiert Safari Kamera und Mikrofon.');
+  } else if (typeof Peer === 'undefined') {
+    homeError('Die Verbindungs-Bibliothek konnte nicht geladen werden. Hat das WLAN Internetzugang?');
+  }
+
+  function readCode() {
+    const c = norm($('code').value);
+    if (c.length < 4) { homeError('Bitte einen Code mit mindestens 4 Zeichen eingeben.'); return null; }
+    store('bp_code', c);
+    return c;
+  }
+
+  $('goCam').onclick = () => {
+    const c = readCode(); if (!c || typeof Peer === 'undefined') return;
+    makeAudioCtx(); // innerhalb des Taps erzeugen, sonst blockiert iOS
+    startCamera(c);
+  };
+  $('goMon').onclick = () => {
+    const c = readCode(); if (!c || typeof Peer === 'undefined') return;
+    makeAudioCtx();
+    startMonitor(c);
+  };
+
+  // =====================================================
+  // KAMERA
+  // =====================================================
+  let stream = null, facing = load('bp_facing') || 'environment';
+  let meterSrc = null, analyser = null, meterTimer = null;
+  const monitors = new Map();
+  const camStatus = (t, c) => setStatus('camDot', 'camStatus', t, c);
+
+  function getStream() {
+    return navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 20, max: 30 } },
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true }
+    });
+  }
+
+  async function startCamera(code) {
+    role = 'cam';
+    show('cam');
+    $('camCode').textContent = code;
+    camStatus('Kamera wird gestartet…', 'warn');
+    try {
+      stream = await getStream();
+    } catch (e) {
+      camStatus('Kein Zugriff auf Kamera/Mikrofon (' + e.name + ')', 'bad');
+      return;
+    }
+    $('localVideo').srcObject = stream;
+    startMeter(stream);
+    keepAwake();
+    camPeer(code);
+  }
+
+  let camRetryTimer = null;
+  function retryCam(code, ms) { clearTimeout(camRetryTimer); camRetryTimer = setTimeout(() => camPeer(code), ms); }
+
+  function camPeer(code) {
+    if (peer && !peer.destroyed) peer.destroy();
+    const p = new Peer(PREFIX + code + '-cam', PEER_OPTS);
+    peer = p;
+    p.on('open', () => { camStatus('Bereit – warte auf Monitor', 'ok'); updateCamCount(); });
+    p.on('connection', c => {
+      c.on('open', () => {
+        if (monitors.has(c.peer)) dropMonitor(c.peer);
+        const m = { conn: c, call: null };
+        monitors.set(c.peer, m);
+        m.call = p.call(c.peer, stream);
+        m.call.on('close', () => dropIf(c.peer, m));
+        m.call.on('error', () => dropIf(c.peer, m));
+        updateCamCount();
+      });
+      c.on('close', () => dropIf(c.peer, monitors.get(c.peer) && monitors.get(c.peer).conn === c ? monitors.get(c.peer) : null));
+      c.on('error', () => dropIf(c.peer, monitors.get(c.peer) && monitors.get(c.peer).conn === c ? monitors.get(c.peer) : null));
+    });
+    p.on('disconnected', () => {
+      if (peer !== p) return;
+      camStatus('Signalserver getrennt – verbinde neu…', 'warn');
+      setTimeout(() => { if (peer === p && !p.destroyed && p.disconnected) p.reconnect(); }, 3000);
+    });
+    p.on('error', err => {
+      if (peer !== p) return;
+      if (err.type === 'unavailable-id') {
+        camStatus('Code noch belegt – neuer Versuch in 5 s…', 'warn'); retryCam(code, 5000);
+      } else if (['network', 'server-error', 'socket-error', 'socket-closed', 'browser-incompatible'].includes(err.type)) {
+        camStatus('Kein Signalserver (Internet?) – neuer Versuch…', 'warn'); retryCam(code, 5000);
+      } else {
+        console.warn('Peer-Fehler', err.type, err);
+      }
+    });
+  }
+
+  function dropIf(id, m) { if (m && monitors.get(id) === m) dropMonitor(id); }
+  function dropMonitor(id) {
+    const m = monitors.get(id); if (!m) return;
+    monitors.delete(id);
+    try { m.call && m.call.close(); } catch (e) {}
+    try { m.conn && m.conn.close(); } catch (e) {}
+    updateCamCount();
+  }
+  function updateCamCount() {
+    $('camCount').textContent = monitors.size;
+    if (peer && peer.open) camStatus(monitors.size ? 'Überträgt' : 'Bereit – warte auf Monitor', 'ok');
+  }
+
+  function startMeter(s) {
+    try { meterSrc && meterSrc.disconnect(); } catch (e) {}
+    analyser = null;
+    if (audioCtx) {
+      try {
+        audioCtx.resume();
+        meterSrc = audioCtx.createMediaStreamSource(s);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 1024;
+        meterSrc.connect(analyser);
+      } catch (e) { analyser = null; }
+    }
+    clearInterval(meterTimer);
+    const buf = new Float32Array(1024);
+    meterTimer = setInterval(() => {
+      let lvl = 0;
+      if (analyser) {
+        analyser.getFloatTimeDomainData(buf);
+        let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+        const db = 20 * Math.log10(Math.sqrt(sum / buf.length) + 1e-8);
+        lvl = Math.max(0, Math.min(100, (db + 70) * 100 / 60)); // -70 dB → 0, -10 dB → 100
+      }
+      $('camMeter').style.width = lvl + '%';
+      // Pegel dient gleichzeitig als Lebenszeichen für den Monitor
+      for (const m of monitors.values()) { try { if (m.conn.open) m.conn.send({ t: 'lvl', v: Math.round(lvl) }); } catch (e) {} }
+    }, 250);
+  }
+
+  async function restartStream() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    try { stream = await getStream(); }
+    catch (e) { camStatus('Kamera-Neustart fehlgeschlagen (' + e.name + ')', 'bad'); return; }
+    $('localVideo').srcObject = stream;
+    startMeter(stream);
+    for (const m of monitors.values()) {
+      const pc = m.call && m.call.peerConnection; if (!pc) continue;
+      for (const sender of pc.getSenders()) {
+        const kind = sender.track && sender.track.kind; if (!kind) continue;
+        const nt = stream.getTracks().find(t => t.kind === kind);
+        if (nt) sender.replaceTrack(nt).catch(() => {});
+      }
+    }
+  }
+
+  $('flip').onclick = () => { facing = facing === 'environment' ? 'user' : 'environment'; store('bp_facing', facing); restartStream(); };
+  $('nightBtn').onclick = () => $('night').classList.add('on');
+  $('night').onclick = () => $('night').classList.remove('on');
+  $('camStop').onclick = () => location.reload();
+
+  // =====================================================
+  // MONITOR
+  // =====================================================
+  let camId = null, conn = null, call = null, lastBeat = 0, connected = false, everConnected = false;
+  let retryTimer = null, soundOn = false, alarmOn = load('bp_alarm') !== '0';
+  let threshold = parseInt(load('bp_thr') || '55', 10), lastNoise = 0, lastBeep = 0, lastLostBeep = 0;
+  const monStatus = (t, c) => setStatus('monDot', 'monStatus', t, c);
+
+  function startMonitor(code) {
+    role = 'mon';
+    show('mon');
+    $('monCode').textContent = '🔑 ' + code;
+    camId = PREFIX + code + '-cam';
+    applyThreshold(); applyAlarmBtn();
+    keepAwake();
+    monStatus('Verbinde…', 'warn');
+
+    const p = new Peer(PREFIX + code + '-mon-' + genCode(8), PEER_OPTS);
+    peer = p;
+    p.on('open', () => monitorConnect());
+    p.on('call', c => {
+      if (call && call !== c) { try { call.close(); } catch (e) {} }
+      call = c;
+      c.answer(); // nur empfangen
+      c.on('stream', s => {
+        const v = $('remoteVideo');
+        v.srcObject = s; v.muted = !soundOn;
+        v.play().catch(() => {});
+        monStatus('Live', 'ok');
+      });
+      c.on('close', () => { if (call === c) lostConnection('Video beendet'); });
+      c.on('error', () => { if (call === c) lostConnection('Videofehler'); });
+    });
+    p.on('disconnected', () => {
+      setTimeout(() => { if (!p.destroyed && p.disconnected) p.reconnect(); }, 3000);
+    });
+    p.on('error', err => {
+      if (err.type === 'peer-unavailable') {
+        monStatus('Kamera nicht gefunden – läuft sie mit diesem Code?', 'warn');
+        if (everConnected) setLost(true);
+        scheduleRetry(4000);
+      } else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
+        monStatus('Kein Signalserver (Internet?) – neuer Versuch…', 'warn');
+        scheduleRetry(5000);
+      } else {
+        console.warn('Peer-Fehler', err.type, err);
+      }
+    });
+    setInterval(tick, 1000);
+  }
+
+  function scheduleRetry(ms) { clearTimeout(retryTimer); retryTimer = setTimeout(monitorConnect, ms); }
+
+  function monitorConnect() {
+    clearTimeout(retryTimer);
+    if (!peer || peer.destroyed) return;
+    if (peer.disconnected) { peer.reconnect(); scheduleRetry(3000); return; }
+    if (conn) { const old = conn; conn = null; try { old.close(); } catch (e) {} }
+    const c = peer.connect(camId);
+    conn = c;
+    if (!connected) monStatus('Verbinde mit Kamera…', 'warn');
+    const to = setTimeout(() => {
+      if (conn === c && !c.open) {
+        monStatus('Keine Verbindung – beide im selben WLAN?', 'warn');
+        conn = null; try { c.close(); } catch (e) {}
+        if (everConnected) setLost(true);
+        scheduleRetry(1000);
+      }
+    }, 12000);
+    c.on('open', () => { clearTimeout(to); lastBeat = Date.now(); });
+    c.on('data', d => {
+      if (conn !== c) return;
+      lastBeat = Date.now();
+      if (!connected) { connected = true; everConnected = true; setLost(false); monStatus('Live', 'ok'); }
+      if (d && d.t === 'lvl') onLevel(d.v);
+    });
+    c.on('close', () => { if (conn === c) lostConnection('Verbindung getrennt'); });
+    c.on('error', () => { if (conn === c) lostConnection('Verbindungsfehler'); });
+  }
+
+  function lostConnection(reason) {
+    connected = false; lastBeat = 0;
+    const c = conn; conn = null; try { c && c.close(); } catch (e) {}
+    const k = call; call = null; try { k && k.close(); } catch (e) {}
+    $('monMeter').style.width = '0%';
+    monStatus(reason + ' – verbinde neu…', 'bad');
+    if (everConnected) setLost(true);
+    scheduleRetry(2000);
+  }
+
+  function setLost(on) { document.body.classList.toggle('lost', on); }
+
+  function tick() {
+    if (conn && lastBeat && Date.now() - lastBeat > 5000) {
+      lostConnection('Kein Signal seit ' + Math.round((Date.now() - lastBeat) / 1000) + ' s');
+    }
+    if (document.body.classList.contains('lost') && alarmOn && Date.now() - lastLostBeep > 6000) {
+      lastLostBeep = Date.now(); beep(440, 0.4, 3);
+    }
+    if (lastNoise) {
+      const s = Math.round((Date.now() - lastNoise) / 1000);
+      $('lastNoise').textContent = 'Letztes Geräusch: ' + (s < 5 ? 'jetzt' : s < 60 ? 'vor ' + s + ' s' : 'vor ' + Math.round(s / 60) + ' min');
+    }
+  }
+
+  function onLevel(v) {
+    $('monMeter').style.width = v + '%';
+    if (v >= threshold) {
+      lastNoise = Date.now();
+      const f = $('flash'); f.classList.add('on'); clearTimeout(f._t); f._t = setTimeout(() => f.classList.remove('on'), 800);
+      if (alarmOn && !soundOn && Date.now() - lastBeep > 4000) { lastBeep = Date.now(); beep(880, 0.2, 2); }
+    }
+  }
+
+  function beep(freq, dur, times) {
+    if (!audioCtx) return;
+    try {
+      audioCtx.resume();
+      const t0 = audioCtx.currentTime;
+      for (let i = 0; i < times; i++) {
+        const t = t0 + i * (dur + 0.12);
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.6, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g).connect(audioCtx.destination);
+        o.start(t); o.stop(t + dur + 0.05);
+      }
+    } catch (e) {}
+  }
+
+  function applyThreshold() {
+    $('thr').value = threshold; $('thrVal').textContent = threshold;
+    $('thrMark').style.left = threshold + '%';
+  }
+  function applyAlarmBtn() {
+    $('alarmBtn').textContent = alarmOn ? '🔔 Alarm-Ton an' : '🔕 Alarm-Ton aus';
+    $('alarmBtn').classList.toggle('on', alarmOn);
+  }
+  $('thr').oninput = e => { threshold = parseInt(e.target.value, 10); store('bp_thr', threshold); applyThreshold(); };
+  $('alarmBtn').onclick = () => { makeAudioCtx(); alarmOn = !alarmOn; store('bp_alarm', alarmOn ? '1' : '0'); applyAlarmBtn(); if (alarmOn) beep(880, 0.15, 1); };
+  $('soundBtn').onclick = () => {
+    makeAudioCtx();
+    soundOn = !soundOn;
+    const v = $('remoteVideo'); v.muted = !soundOn; v.play().catch(() => {});
+    $('soundBtn').textContent = soundOn ? '🔊 Ton aus' : '🔇 Ton an';
+    $('soundBtn').classList.toggle('on', soundOn);
+    $('tapSound').style.display = soundOn ? 'none' : 'flex';
+  };
+  $('monStop').onclick = () => location.reload();
+
+  // ---------- App kommt zurück in den Vordergrund ----------
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return;
+    keepAwake();
+    if (audioCtx) audioCtx.resume();
+    if (role === 'cam' && stream) {
+      if (stream.getTracks().some(t => t.readyState === 'ended')) await restartStream();
+      if (peer && !peer.destroyed && peer.disconnected) peer.reconnect();
+    }
+    if (role === 'mon' && !connected) scheduleRetry(0);
+  });
+})();
+</script>
+</body>
+</html>
