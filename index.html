@@ -9,6 +9,68 @@
 <meta name="apple-mobile-web-app-title" content="Babyphone">
 <meta name="theme-color" content="#0e1116">
 <title>Babyphone</title>
+<script>
+/* LAN-Schutz: Nur Verbindungen über private Heimnetz-Adressen zulassen.
+   Wird VOR PeerJS geladen und ersetzt RTCPeerConnection durch eine gefilterte Version:
+   - keine STUN/TURN-Server (iceServers immer leer)
+   - nur "host"-Kandidaten mit privater Adresse (192.168.x, 10.x, 172.16–31.x, fe80::, fd/fc-IPv6, *.local)
+   - öffentliche IPv4/IPv6-Adressen werden weder gesendet noch angenommen */
+(function () {
+  var Native = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+  if (!Native) return;
+  function isLocalAddr(a) {
+    if (!a) return false;
+    a = String(a).toLowerCase().replace(/^\[|\]$/g, '');
+    if (/\.local$/.test(a)) return true;                       // mDNS-Name: nur im lokalen Netz auflösbar
+    var m = a.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+    if (m) { var x = +m[1], y = +m[2];
+      return x === 10 || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168) || (x === 169 && y === 254); }
+    if (a.indexOf(':') >= 0) return /^fe[89ab][0-9a-f]:/.test(a) || /^f[cd][0-9a-f]{2}:/.test(a);
+    return false;
+  }
+  function candOk(str) {
+    if (!str) return true;                                      // Ende-Signal (leerer Kandidat) durchlassen
+    var p = String(str).replace(/^a=/, '').split(' ');
+    return p[7] === 'host' && isLocalAddr(p[4]);
+  }
+  function filterSdp(d) {
+    if (!d || !d.sdp) return d;
+    var sdp = d.sdp.split('\r\n').filter(function (l) { return l.indexOf('a=candidate:') !== 0 || candOk(l); }).join('\r\n');
+    return { type: d.type, sdp: sdp };
+  }
+  class LanPC extends Native {
+    constructor(cfg) {
+      var c = Object.assign({}, cfg || {}); c.iceServers = [];
+      super(c);
+      var self = this; self._oic = null;
+      Native.prototype.addEventListener.call(this, 'icecandidate', function (e) {
+        if (e.candidate && !candOk(e.candidate.candidate)) return;   // öffentliche Adresse: nicht weitergeben
+        if (self._oic) self._oic.call(self, e);
+      });
+    }
+    get onicecandidate() { return this._oic; }
+    set onicecandidate(fn) { this._oic = fn; }
+    addEventListener(type, fn, opt) {
+      if (type === 'icecandidate') {
+        var wrapped = function (e) { if (e.candidate && !candOk(e.candidate.candidate)) return; fn.call(this, e); };
+        return Native.prototype.addEventListener.call(this, type, wrapped, opt);
+      }
+      return Native.prototype.addEventListener.call(this, type, fn, opt);
+    }
+    createOffer(o) { return Native.prototype.createOffer.call(this, o).then(filterSdp); }
+    createAnswer(o) { return Native.prototype.createAnswer.call(this, o).then(filterSdp); }
+    setLocalDescription(d) { return d ? Native.prototype.setLocalDescription.call(this, filterSdp(d)) : Native.prototype.setLocalDescription.call(this); }
+    setRemoteDescription(d) { return Native.prototype.setRemoteDescription.call(this, filterSdp(d)); }
+    addIceCandidate(c) {
+      if (c && c.candidate && !candOk(c.candidate)) return Promise.resolve(); // fremde öffentliche Adresse ignorieren
+      return Native.prototype.addIceCandidate.call(this, c);
+    }
+  }
+  window.RTCPeerConnection = LanPC;
+  if (window.webkitRTCPeerConnection) window.webkitRTCPeerConnection = LanPC;
+  window.__isLocalAddr = isLocalAddr;
+})();
+</script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   :root{
@@ -169,7 +231,7 @@
     <div id="flash"></div>
     <div id="tapSound"><span>🔇 Ton ist aus – unten „Ton an“ tippen</span></div>
     <div id="monTop">
-      <span class="pill"><span id="monDot" class="dot"></span><span id="monStatus">Startet…</span></span>
+      <span class="pill"><span id="monDot" class="dot"></span><span id="monStatus">Startet…</span><span id="netBadge"></span></span>
       <span class="pill" id="monCode"></span>
     </div>
     <div id="lostFrame"></div>
@@ -193,6 +255,7 @@
       <div class="meter"><i id="monMeter"></i><b id="thrMark"></b></div>
     </div>
     <div class="tags" id="monTags"></div>
+    <div class="hint" id="pathInfo">Verbindungsweg: wird geprüft…</div>
 
     <div class="grid2">
       <button id="soundBtn">🔇 Ton an</button>
@@ -709,6 +772,7 @@
     const tc = talkCall; talkCall = null; try { tc && tc.close(); } catch (e) {}
     if (talking) talkStop();
     $('monMeter').style.width = '0%'; $('fsMeter').style.width = '0%';
+    $('netBadge').textContent = ''; $('pathInfo').textContent = 'Verbindungsweg: wird geprüft…';
     monStatus(reason + ' – verbinde neu…', 'bad');
     if (everConnected) setLost(true, reason);
     scheduleRetry(2000);
@@ -738,6 +802,23 @@
     setTimeout(() => beep(880, 0.2, 1, 0.9), 750); setTimeout(() => beep(440, 0.35, 1, 0.9), 1010);
   }
 
+  // Welcher Weg wird tatsächlich benutzt? (aus den WebRTC-Statistiken)
+  function showPath(st) {
+    const byId = {}; st.forEach(r => { byId[r.id] = r; });
+    let pair = null;
+    st.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = byId[r.selectedCandidatePairId]; });
+    if (!pair) st.forEach(r => { if (!pair && r.type === 'candidate-pair' && r.state === 'succeeded' && (r.nominated || r.selected)) pair = r; });
+    if (!pair) return;
+    const l = byId[pair.localCandidateId] || {}, rm = byId[pair.remoteCandidateId] || {};
+    const la = l.address || l.ip || '', ra = rm.address || rm.ip || '';
+    const isLoc = a => !a || (window.__isLocalAddr ? window.__isLocalAddr(a) : true);
+    const ok = l.candidateType === 'host' && (rm.candidateType === 'host' || rm.candidateType === 'prflx') && isLoc(la);
+    $('netBadge').textContent = ok ? ' · 🏠' : ' · ⚠️';
+    $('pathInfo').textContent = ok
+      ? '🏠 Direkt im Heimnetz: ' + (la || 'lokal') + ' ↔ ' + (ra || 'lokal') + ' – nichts geht ins Internet'
+      : '⚠️ Verbindungsweg unklar (' + (l.candidateType || '?') + '/' + (rm.candidateType || '?') + ')';
+  }
+
   // Bild eingefroren? (Datenkanal lebt, aber keine neuen Videobilder)
   async function checkMedia() {
     if (!connected || statsBusy) return;
@@ -752,6 +833,7 @@
           f = r.framesDecoded != null ? r.framesDecoded : (r.framesReceived != null ? r.framesReceived : f);
         }
       });
+      showPath(st);
       if (f !== null) {
         if (f !== lastFrames) { lastFrames = f; lastFrameAt = Date.now(); }
         else if (lastFrameAt && Date.now() - lastFrameAt > 8000) lostConnection('Bild eingefroren');
