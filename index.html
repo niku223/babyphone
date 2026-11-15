@@ -168,9 +168,11 @@
   function setStatus(dotId, txtId, text, cls) { $(txtId).textContent = text; $(dotId).className = 'dot ' + (cls || ''); }
   function homeError(msg) { const e = $('homeErr'); e.innerHTML = msg; e.style.display = 'block'; }
 
-  function makeAudioCtx() {
+  function makeAudioCtx(forCapture) {
     try {
-      if ('audioSession' in navigator) navigator.audioSession.type = 'playback'; // ignoriert Stummschalter (Safari 16.4+)
+      // Kamera braucht Aufnahme: 'playback' würde das Mikrofon sperren (InvalidStateError).
+      // Monitor: 'playback' lässt Alarm auch bei Stummschalter hören (Safari 16.4+).
+      if ('audioSession' in navigator) navigator.audioSession.type = forCapture ? 'play-and-record' : 'playback';
     } catch (e) {}
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -205,7 +207,7 @@
 
   $('goCam').onclick = () => {
     const c = readCode(); if (!c || typeof Peer === 'undefined') return;
-    makeAudioCtx(); // innerhalb des Taps erzeugen, sonst blockiert iOS
+    makeAudioCtx(true); // innerhalb des Taps erzeugen, sonst blockiert iOS
     startCamera(c);
   };
   $('goMon').onclick = () => {
@@ -237,8 +239,14 @@
     try {
       stream = await getStream();
     } catch (e) {
-      camStatus('Kein Zugriff auf Kamera/Mikrofon (' + e.name + ')', 'bad');
-      return;
+      // Fallback: Audio-Session auf Standard zurücksetzen und nochmal versuchen
+      try {
+        if ('audioSession' in navigator) navigator.audioSession.type = 'auto';
+        stream = await getStream();
+      } catch (e2) {
+        camStatus('Kein Zugriff auf Kamera/Mikrofon (' + e2.name + ')', 'bad');
+        return;
+      }
     }
     $('localVideo').srcObject = stream;
     startMeter(stream);
