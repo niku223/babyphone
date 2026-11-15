@@ -28,45 +28,69 @@
   .row{display:flex;gap:10px;align-items:center}
   input[type=text]{flex:1;min-width:0;font:600 24px/1 ui-monospace,Menlo,monospace;letter-spacing:4px;text-transform:uppercase;
     background:#0b0e13;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px}
-  button{font:600 16px/1 inherit;font-family:inherit;color:var(--text);background:#232a35;border:1px solid var(--line);
+  button{font:600 16px/1.2 inherit;font-family:inherit;color:var(--text);background:#232a35;border:1px solid var(--line);
     border-radius:12px;padding:14px 16px;cursor:pointer}
   button:active{transform:scale(.98)}
+  button:disabled{opacity:.45}
   button.big{width:100%;padding:20px;font-size:19px;text-align:left;display:flex;gap:14px;align-items:center}
   button.big small{display:block;font-weight:400;font-size:14px;color:var(--mute);margin-top:4px}
-  button.primary{background:var(--accent);color:#0b1020;border-color:transparent}
   button.on{background:var(--ok);color:#06140d;border-color:transparent}
+  select{font:inherit;color:var(--text);background:#0b0e13;border:1px solid var(--line);border-radius:10px;padding:10px;width:100%}
+  input[type=range]{width:100%}
   .emoji{font-size:30px}
   .err{background:#3a1414;border:1px solid #6b2323;color:#ffd0d0;border-radius:12px;padding:12px;display:none}
   .hint{font-size:13px;color:var(--mute)}
   .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:rgba(0,0,0,.55);
     font-size:14px;font-weight:600;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-  .dot{width:10px;height:10px;border-radius:50%;background:var(--mute)}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--mute);flex:none}
   .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
   .meter{position:relative;height:14px;border-radius:7px;background:#0b0e13;border:1px solid var(--line);overflow:hidden}
   .meter>i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--ok),var(--warn) 70%,var(--bad));transition:width .2s}
   .meter>b{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;opacity:.8}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .tags{display:flex;gap:8px;flex-wrap:wrap}
+  .tag{font-size:13px;padding:6px 10px;border-radius:999px;background:#232a35}
+  .tag.hot{background:var(--bad);color:#fff}
+  details.card{padding:0}
+  details.card>summary{list-style:none;padding:14px;font-weight:600;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+  details.card>summary::-webkit-details-marker{display:none}
+  details.card>summary::after{content:'▾';color:var(--mute)}
+  details.card[open]>summary::after{content:'▴'}
+  details.card .body{padding:0 14px 14px;display:flex;flex-direction:column;gap:12px}
+  #toast{position:fixed;left:50%;bottom:calc(var(--sb) + 24px);transform:translateX(-50%);background:#000;color:#fff;
+    padding:10px 14px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .3s;z-index:100;pointer-events:none}
+  #toast.on{opacity:.92}
+
   /* Kamera */
-  #localVideo{width:100%;max-height:40vh;object-fit:cover;border-radius:16px;background:#000}
+  #localVideo{width:100%;max-height:36vh;object-fit:cover;border-radius:16px;background:#000}
   .code{font:700 40px/1 ui-monospace,Menlo,monospace;letter-spacing:6px;text-align:center;padding:6px 0}
   #night{position:fixed;inset:0;background:#000;display:none;z-index:50;color:#333;align-items:flex-end;justify-content:center;
-    padding-bottom:calc(var(--sb) + 30px);font-size:13px}
+    padding-bottom:calc(var(--sb) + 30px);font-size:13px;transition:background .6s}
   #night.on{display:flex}
+
   /* Monitor */
-  #mon.on{padding:0;gap:0}
-  #stage{position:relative;flex:1;background:#000;min-height:55vh}
-  #remoteVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+  #mon.on{padding:0;gap:0;height:100vh;height:100dvh;min-height:0}
+  #stage{position:relative;flex:none;height:46vh;height:46dvh;background:#000;overflow:hidden}
+  #remoteVideo{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);object-fit:contain;background:#000}
   #monTop{position:absolute;top:calc(var(--st) + 10px);left:10px;right:10px;display:flex;justify-content:space-between;gap:8px;z-index:2}
-  #monPanel{padding:14px 16px calc(var(--sb) + 14px);background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+  #monPanel{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:14px 16px calc(var(--sb) + 18px);background:var(--bg);
+    border-top:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
   #flash{position:absolute;inset:0;border:6px solid var(--warn);opacity:0;pointer-events:none;transition:opacity .3s;z-index:1}
   #flash.on{opacity:1}
   #lostBanner{display:none;position:absolute;left:10px;right:10px;bottom:10px;z-index:3;background:var(--bad);color:#fff;
-    font-weight:700;padding:14px;border-radius:12px;text-align:center;animation:pulse 1s infinite}
-  body.lost #lostBanner{display:block}
+    font-weight:700;padding:12px;border-radius:12px;text-align:center;animation:pulse 1s infinite;flex-direction:column;gap:8px;align-items:center}
+  body.lost #lostBanner{display:flex}
+  body.lost.acked #lostBanner{animation:none}
+  #lostBanner button{background:#fff;color:#b00;border:0;padding:10px 16px}
+  body.acked #ackBtn{display:none}
+  #noMon{display:none}
+  #noMon.on{display:block}
   @keyframes pulse{50%{opacity:.6}}
-  #tapSound{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none}
-  #tapSound span{background:rgba(0,0,0,.6);padding:10px 14px;border-radius:12px;font-size:14px}
-  input[type=range]{width:100%}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  #tapSound{position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;z-index:2;pointer-events:none}
+  #tapSound span{background:rgba(0,0,0,.6);padding:8px 12px;border-radius:12px;font-size:13px}
+  #talkBtn{width:100%;padding:18px;font-size:17px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none}
+  #talkBtn.active{background:var(--bad);color:#fff;border-color:transparent}
+  #log{font:13px/1.5 ui-monospace,Menlo,monospace;display:flex;flex-direction:column;max-height:200px;overflow:auto}
 </style>
 </head>
 <body>
@@ -98,7 +122,9 @@
     <span class="pill"><span id="camDot" class="dot"></span><span id="camStatus">Startet…</span></span>
     <span class="pill">📺 <span id="camCount">0</span></span>
   </div>
+  <div id="noMon" class="err">⚠️ Kein Monitor mehr verbunden – gerade schaut niemand zu. Bitte Monitor-iPhone prüfen.</div>
   <video id="localVideo" playsinline autoplay muted></video>
+  <div class="tags" id="camTags"></div>
   <div class="card">
     <label>Raum-Code – am Monitor eingeben</label>
     <div class="code" id="camCode"></div>
@@ -109,10 +135,11 @@
   </div>
   <div class="grid2">
     <button id="flip">🔄 Kamera wechseln</button>
-    <button id="nightBtn">🌙 Nachtmodus</button>
+    <button id="nightBtn">🌙 Display aus</button>
   </div>
   <button id="camStop">Beenden</button>
-  <p class="hint" id="awakeHint">Bildschirm bleibt nur an, wenn die Automatische Sperre auf „Nie“ steht. Am besten ans Ladekabel.</p>
+  <p class="hint">Licht, Rauschen und Gegensprechen steuerst du vom Monitor aus. Kamera-iPhone am besten ans Ladekabel.</p>
+  <audio id="talkAudio" autoplay playsinline></audio>
 </section>
 <div id="night">Tippen zum Aufwecken – Übertragung läuft weiter</div>
 
@@ -126,8 +153,9 @@
       <span class="pill"><span id="monDot" class="dot"></span><span id="monStatus">Startet…</span></span>
       <span class="pill" id="monCode"></span>
     </div>
-    <div id="lostBanner">⚠️ Verbindung zur Kamera verloren</div>
+    <div id="lostBanner"><span id="lostText">⚠️ Keine Verbindung zur Kamera</span><button id="ackBtn">🔕 Alarm stumm</button></div>
   </div>
+
   <div id="monPanel">
     <div>
       <div class="row" style="justify-content:space-between;margin-bottom:6px">
@@ -136,17 +164,77 @@
       </div>
       <div class="meter"><i id="monMeter"></i><b id="thrMark"></b></div>
     </div>
-    <div>
-      <label for="thr">Alarm-Schwelle: <span id="thrVal"></span></label>
-      <input id="thr" type="range" min="10" max="95" step="1">
-    </div>
+    <div class="tags" id="monTags"></div>
+
     <div class="grid2">
       <button id="soundBtn">🔇 Ton an</button>
       <button id="alarmBtn">🔔 Alarm-Ton</button>
     </div>
+    <button id="talkBtn">🎙️ Gedrückt halten zum Sprechen</button>
+
+    <details class="card">
+      <summary>💡 Licht &amp; Bild</summary>
+      <div class="body">
+        <div>
+          <label for="lightRange">Nachtlicht (Display des Kamera-iPhones leuchtet warm): <span id="lightVal">aus</span></label>
+          <input id="lightRange" type="range" min="0" max="100" step="5" value="0">
+        </div>
+        <div class="grid2">
+          <button id="lowBtn">🌙 Dunkel-Modus</button>
+          <button id="torchBtn" disabled>🔦 Blitz</button>
+        </div>
+        <p class="hint" style="margin:0">Dunkel-Modus: Kamera belichtet länger (heller, aber ruckeliger). Blitz ist sehr grell – nur kurz zum Nachschauen.</p>
+        <div>
+          <label for="brightRange">Bild aufhellen (nur hier am Monitor): <span id="brightVal"></span></label>
+          <input id="brightRange" type="range" min="100" max="300" step="10" value="100">
+        </div>
+        <button id="rotBtn">↻ Bild drehen</button>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary>🌊 Einschlaf-Rauschen</summary>
+      <div class="body">
+        <select id="noiseType">
+          <option value="off">Aus</option>
+          <option value="white">Weißes Rauschen (hell)</option>
+          <option value="pink">Rosa Rauschen (weich)</option>
+          <option value="brown">Braunes Rauschen (tief, wie Föhn)</option>
+        </select>
+        <div>
+          <label for="noiseVol">Lautstärke: <span id="noiseVolVal"></span></label>
+          <input id="noiseVol" type="range" min="5" max="100" step="5" value="40">
+        </div>
+        <select id="noiseMin">
+          <option value="15">Aus nach 15 Minuten</option>
+          <option value="30" selected>Aus nach 30 Minuten</option>
+          <option value="60">Aus nach 60 Minuten</option>
+          <option value="0">Dauerhaft</option>
+        </select>
+        <p class="hint" id="noiseInfo" style="margin:0">Das Mikrofon hört das Rauschen mit – Alarm-Schwelle ggf. höher stellen.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary>🔔 Alarm-Schwelle: <span id="thrVal"></span></summary>
+      <div class="body">
+        <input id="thr" type="range" min="10" max="95" step="1">
+        <p class="hint" style="margin:0">Liegt der Pegel über der weißen Linie, blinkt das Bild und (wenn Ton aus) piept es.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary>📋 Geräusch-Protokoll (<span id="logCount">0</span>)</summary>
+      <div class="body">
+        <div id="log"></div>
+        <button id="logClear">Protokoll leeren</button>
+      </div>
+    </details>
+
     <button id="monStop">Beenden</button>
   </div>
 </section>
+<div id="toast"></div>
 
 <script>
 (() => {
@@ -161,72 +249,79 @@
   const load = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const genCode = (n = 6) => { const a = new Uint32Array(n); crypto.getRandomValues(a); return Array.from(a, x => ALPH[x % ALPH.length]).join(''); };
   const norm = s => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function throttle(fn, ms) {
+    let last = 0, timer = null;
+    return (...args) => {
+      const now = Date.now(); clearTimeout(timer);
+      if (now - last >= ms) { last = now; fn(...args); }
+      else timer = setTimeout(() => { last = Date.now(); fn(...args); }, ms - (now - last));
+    };
+  }
 
   let role = null, peer = null, audioCtx = null, wakeLock = null;
 
   function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); }
   function setStatus(dotId, txtId, text, cls) { $(txtId).textContent = text; $(dotId).className = 'dot ' + (cls || ''); }
   function homeError(msg) { const e = $('homeErr'); e.innerHTML = msg; e.style.display = 'block'; }
+  function toast(msg, ms = 2500) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('on'), ms); }
 
-  function makeAudioCtx(forCapture) {
-    try {
-      // Kamera braucht Aufnahme: 'playback' würde das Mikrofon sperren (InvalidStateError).
-      // Monitor: 'playback' lässt Alarm auch bei Stummschalter hören (Safari 16.4+).
-      if ('audioSession' in navigator) navigator.audioSession.type = forCapture ? 'play-and-record' : 'playback';
-    } catch (e) {}
-    try {
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      audioCtx.resume();
-    } catch (e) { audioCtx = null; }
+  // Audio-Session: Kamera braucht Aufnahme ('play-and-record'), sonst sperrt Safari das Mikrofon (InvalidStateError).
+  // Monitor startet mit 'playback' (Alarm auch bei Stummschalter), wechselt beim Gegensprechen auf 'play-and-record'.
+  function setAudioSession(type) { try { if ('audioSession' in navigator) navigator.audioSession.type = type; } catch (e) {} }
+  function makeAudioCtx() {
+    try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); }
+    catch (e) { audioCtx = null; }
   }
-
   async function keepAwake() {
-    try {
-      if ('wakeLock' in navigator && document.visibilityState === 'visible') {
-        wakeLock = await navigator.wakeLock.request('screen');
-      }
-    } catch (e) { wakeLock = null; }
+    try { if ('wakeLock' in navigator && document.visibilityState === 'visible') wakeLock = await navigator.wakeLock.request('screen'); }
+    catch (e) { wakeLock = null; }
   }
 
   // ---------- Startseite ----------
   $('code').value = load('bp_code') || genCode();
   $('newCode').onclick = () => { $('code').value = genCode(); };
-
   if (!window.isSecureContext) {
     homeError('Diese Seite muss über <b>https://</b> geöffnet werden – sonst blockiert Safari Kamera und Mikrofon.');
   } else if (typeof Peer === 'undefined') {
     homeError('Die Verbindungs-Bibliothek konnte nicht geladen werden. Hat das WLAN Internetzugang?');
   }
-
   function readCode() {
     const c = norm($('code').value);
     if (c.length < 4) { homeError('Bitte einen Code mit mindestens 4 Zeichen eingeben.'); return null; }
     store('bp_code', c);
     return c;
   }
-
   $('goCam').onclick = () => {
     const c = readCode(); if (!c || typeof Peer === 'undefined') return;
-    makeAudioCtx(true); // innerhalb des Taps erzeugen, sonst blockiert iOS
+    setAudioSession('play-and-record'); makeAudioCtx(); // im Tap erzeugen, sonst blockiert iOS
     startCamera(c);
   };
   $('goMon').onclick = () => {
     const c = readCode(); if (!c || typeof Peer === 'undefined') return;
-    makeAudioCtx();
+    setAudioSession('playback'); makeAudioCtx();
     startMonitor(c);
   };
 
   // =====================================================
   // KAMERA
   // =====================================================
-  let stream = null, facing = load('bp_facing') || 'environment';
+  let stream = null, facing = load('bp_facing') || 'environment', nightMode = false;
   let meterSrc = null, analyser = null, meterTimer = null;
+  let noiseSrc = null, noiseGain = null, noiseTimer = null;
   const monitors = new Map();
+  const cs = { torch: false, torchAvail: false, light: 0, noise: 'off', noiseVol: 40, noiseMin: 30, noiseEnds: 0, lowlight: false, talk: false };
   const camStatus = (t, c) => setStatus('camDot', 'camStatus', t, c);
 
+  function videoConstraints(withFacing) {
+    const c = { width: { ideal: 1280 }, height: { ideal: 720 },
+      frameRate: cs.lowlight ? { ideal: 10, max: 12 } : { ideal: 20, max: 30 } };
+    if (withFacing) c.facingMode = { ideal: facing };
+    return c;
+  }
   function getStream() {
     return navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 20, max: 30 } },
+      video: videoConstraints(true),
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true }
     });
   }
@@ -239,19 +334,16 @@
     try {
       stream = await getStream();
     } catch (e) {
-      // Fallback: Audio-Session auf Standard zurücksetzen und nochmal versuchen
-      try {
-        if ('audioSession' in navigator) navigator.audioSession.type = 'auto';
-        stream = await getStream();
-      } catch (e2) {
-        camStatus('Kein Zugriff auf Kamera/Mikrofon (' + e2.name + ')', 'bad');
-        return;
-      }
+      try { setAudioSession('auto'); stream = await getStream(); }
+      catch (e2) { camStatus('Kein Zugriff auf Kamera/Mikrofon (' + e2.name + ')', 'bad'); return; }
     }
     $('localVideo').srcObject = stream;
+    watchTracks(stream);
     startMeter(stream);
+    await applyVideo();
     keepAwake();
     camPeer(code);
+    updateCamUI();
   }
 
   let camRetryTimer = null;
@@ -262,19 +354,36 @@
     const p = new Peer(PREFIX + code + '-cam', PEER_OPTS);
     peer = p;
     p.on('open', () => { camStatus('Bereit – warte auf Monitor', 'ok'); updateCamCount(); });
+
+    // Monitor meldet sich per Datenkanal → Kamera ruft ihn mit Bild+Ton an
     p.on('connection', c => {
       c.on('open', () => {
         if (monitors.has(c.peer)) dropMonitor(c.peer);
-        const m = { conn: c, call: null };
+        if (stream && stream.getTracks().some(t => t.readyState === 'ended')) restartStream(); // tote Kamera-Spur erneuern
+        const m = { conn: c, call: null, lastSeen: Date.now() };
         monitors.set(c.peer, m);
         m.call = p.call(c.peer, stream);
         m.call.on('close', () => dropIf(c.peer, m));
         m.call.on('error', () => dropIf(c.peer, m));
+        try { c.send(Object.assign({ t: 'state' }, cs)); } catch (e) {}
         updateCamCount();
       });
-      c.on('close', () => dropIf(c.peer, monitors.get(c.peer) && monitors.get(c.peer).conn === c ? monitors.get(c.peer) : null));
-      c.on('error', () => dropIf(c.peer, monitors.get(c.peer) && monitors.get(c.peer).conn === c ? monitors.get(c.peer) : null));
+      c.on('data', d => {
+        const m = monitors.get(c.peer); if (m && m.conn === c) m.lastSeen = Date.now();
+        if (d && d.t === 'cmd') onCmd(d);
+      });
+      const own = () => { const m = monitors.get(c.peer); return m && m.conn === c ? m : null; };
+      c.on('close', () => dropIf(c.peer, own()));
+      c.on('error', () => dropIf(c.peer, own()));
     });
+
+    // Gegensprechen: Monitor ruft mit seinem Mikrofon an
+    p.on('call', call => {
+      if (!monitors.has(call.peer)) { try { call.close(); } catch (e) {} return; }
+      call.answer();
+      call.on('stream', s => { const a = $('talkAudio'); a.srcObject = s; a.play().catch(() => {}); });
+    });
+
     p.on('disconnected', () => {
       if (peer !== p) return;
       camStatus('Signalserver getrennt – verbinde neu…', 'warn');
@@ -282,27 +391,143 @@
     });
     p.on('error', err => {
       if (peer !== p) return;
-      if (err.type === 'unavailable-id') {
-        camStatus('Code noch belegt – neuer Versuch in 5 s…', 'warn'); retryCam(code, 5000);
-      } else if (['network', 'server-error', 'socket-error', 'socket-closed', 'browser-incompatible'].includes(err.type)) {
-        camStatus('Kein Signalserver (Internet?) – neuer Versuch…', 'warn'); retryCam(code, 5000);
-      } else {
-        console.warn('Peer-Fehler', err.type, err);
-      }
+      if (err.type === 'unavailable-id') { camStatus('Code noch belegt – neuer Versuch in 5 s…', 'warn'); retryCam(code, 5000); }
+      else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) { camStatus('Kein Signalserver (Internet?) – neuer Versuch…', 'warn'); retryCam(code, 5000); }
+      else console.warn('Peer-Fehler', err.type, err);
     });
   }
 
+  // Monitor-Watchdog: Monitor schickt jede Sekunde ein Lebenszeichen
+  setInterval(() => {
+    if (role !== 'cam') return;
+    for (const [id, m] of monitors) if (Date.now() - m.lastSeen > 6000) dropMonitor(id);
+  }, 1000);
   function dropIf(id, m) { if (m && monitors.get(id) === m) dropMonitor(id); }
   function dropMonitor(id) {
     const m = monitors.get(id); if (!m) return;
     monitors.delete(id);
     try { m.call && m.call.close(); } catch (e) {}
     try { m.conn && m.conn.close(); } catch (e) {}
+    if (!monitors.size && cs.talk) { cs.talk = false; updateCamUI(); }
     updateCamCount();
   }
+  let hadMonitor = false;
   function updateCamCount() {
     $('camCount').textContent = monitors.size;
-    if (peer && peer.open) camStatus(monitors.size ? 'Überträgt' : 'Bereit – warte auf Monitor', 'ok');
+    if (monitors.size) hadMonitor = true;
+    const orphan = hadMonitor && !monitors.size;
+    $('noMon').classList.toggle('on', orphan); // nur sichtbar, kein Ton – soll das Baby nicht wecken
+    if (peer && peer.open) {
+      if (monitors.size) camStatus('Überträgt', 'ok');
+      else if (orphan) camStatus('Monitor getrennt!', 'bad');
+      else camStatus('Bereit – warte auf Monitor', 'ok');
+    }
+  }
+  function broadcast(obj) { for (const m of monitors.values()) { try { if (m.conn.open) m.conn.send(obj); } catch (e) {} } }
+  function sendState() { broadcast(Object.assign({ t: 'state' }, cs)); updateCamUI(); }
+
+  async function onCmd(d) {
+    if ('torch' in d) { cs.torch = !!d.torch; await applyVideo(); }
+    if ('lowlight' in d) { cs.lowlight = !!d.lowlight; await applyVideo(); }
+    if ('light' in d) setLight(+d.light || 0);
+    if ('noise' in d) setNoise(String(d.noise), +d.vol, +d.minutes);
+    if ('talk' in d) cs.talk = !!d.talk;
+    sendState();
+  }
+
+  // Blitz + Dunkel-Modus über Track-Constraints
+  async function applyVideo() {
+    const vt = stream && stream.getVideoTracks()[0];
+    if (!vt) return;
+    let caps = {};
+    try { caps = vt.getCapabilities ? vt.getCapabilities() : {}; } catch (e) {}
+    cs.torchAvail = caps.torch === true || (Array.isArray(caps.torch) && caps.torch.includes(true));
+    if (!cs.torchAvail) cs.torch = false;
+    const c = videoConstraints(false);
+    if (cs.torchAvail) c.advanced = [{ torch: cs.torch }];
+    try { await vt.applyConstraints(c); }
+    catch (e) {
+      console.warn('applyConstraints', e);
+      if (cs.torch) { cs.torch = false; try { await vt.applyConstraints(videoConstraints(false)); } catch (_) {} }
+    }
+    try { const s = vt.getSettings(); if (typeof s.torch === 'boolean') cs.torch = s.torch; } catch (e) {}
+  }
+
+  // Nachtlicht = Display leuchtet warm
+  function setLight(n) { cs.light = clamp(Math.round(n), 0, 100); renderNight(); }
+  function renderNight() {
+    const ov = $('night');
+    ov.classList.toggle('on', nightMode || cs.light > 0);
+    if (cs.light > 0) {
+      ov.style.background = 'hsl(30,100%,' + Math.round(6 + cs.light * 0.5) + '%)';
+      ov.style.color = 'rgba(0,0,0,.35)';
+    } else { ov.style.background = '#000'; ov.style.color = '#333'; }
+  }
+  $('nightBtn').onclick = () => { nightMode = true; renderNight(); };
+  $('night').onclick = () => { nightMode = false; if (cs.light > 0) { cs.light = 0; sendState(); } renderNight(); };
+
+  // Rauschen (per WebAudio erzeugt, keine Dateien nötig)
+  const gainFor = v => Math.pow(v / 100, 2) * 0.8;
+  function noiseBuffer(type) {
+    const sr = audioCtx.sampleRate, len = sr * 6, buf = audioCtx.createBuffer(1, len, sr), d = buf.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0, last = 0;
+    for (let i = 0; i < len; i++) {
+      const w = Math.random() * 2 - 1;
+      if (type === 'white') d[i] = w * 0.35;
+      else if (type === 'pink') {
+        b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852;
+        b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+        d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11; b6 = w * 0.115926;
+      } else { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
+    }
+    // Übergang am Schleifenende glätten (kein Knacken)
+    const fade = Math.floor(sr * 0.1);
+    for (let i = 0; i < fade; i++) { const k = i / fade; d[len - fade + i] = d[len - fade + i] * (1 - k) + d[i] * k; }
+    buf._loopStart = fade / sr;
+    return buf;
+  }
+  function stopNoise() {
+    clearTimeout(noiseTimer);
+    if (noiseSrc && audioCtx) {
+      const s = noiseSrc, g = noiseGain;
+      try { g.gain.setTargetAtTime(0, audioCtx.currentTime, 0.4); s.stop(audioCtx.currentTime + 2); }
+      catch (e) { try { s.stop(); } catch (_) {} }
+    }
+    noiseSrc = null; noiseGain = null;
+  }
+  function setNoise(type, vol, minutes) {
+    if (!['off', 'white', 'pink', 'brown'].includes(type)) type = 'off';
+    if (!isNaN(vol)) cs.noiseVol = clamp(vol, 0, 100);
+    const sameRun = noiseSrc && type === cs.noise && minutes === cs.noiseMin;
+    if (!isNaN(minutes)) cs.noiseMin = minutes;
+    if (sameRun) { noiseGain.gain.setTargetAtTime(gainFor(cs.noiseVol), audioCtx.currentTime, 0.15); return; }
+    stopNoise();
+    cs.noise = type; cs.noiseEnds = 0;
+    if (type === 'off' || !audioCtx) { cs.noise = 'off'; return; }
+    audioCtx.resume();
+    const buf = noiseBuffer(type);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf; src.loop = true; src.loopStart = buf._loopStart; src.loopEnd = buf.duration;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    g.gain.setTargetAtTime(gainFor(cs.noiseVol), audioCtx.currentTime, 0.8);
+    src.connect(g).connect(audioCtx.destination);
+    src.start();
+    noiseSrc = src; noiseGain = g;
+    if (cs.noiseMin > 0) {
+      cs.noiseEnds = Date.now() + cs.noiseMin * 60000;
+      noiseTimer = setTimeout(() => { stopNoise(); cs.noise = 'off'; cs.noiseEnds = 0; sendState(); }, cs.noiseMin * 60000);
+    }
+  }
+
+  function updateCamUI() {
+    const tags = [];
+    if (cs.talk) tags.push('<span class="tag hot">🗣️ Elternteil spricht</span>');
+    if (cs.torch) tags.push('<span class="tag">🔦 Blitz an</span>');
+    if (cs.light > 0) tags.push('<span class="tag">💡 Nachtlicht ' + cs.light + ' %</span>');
+    if (cs.lowlight) tags.push('<span class="tag">🌙 Dunkel-Modus</span>');
+    if (cs.noise !== 'off') tags.push('<span class="tag">🌊 Rauschen' + (cs.noiseEnds ? ' bis ' + new Date(cs.noiseEnds).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '') + '</span>');
+    $('camTags').innerHTML = tags.join('');
   }
 
   function startMeter(s) {
@@ -312,33 +537,44 @@
       try {
         audioCtx.resume();
         meterSrc = audioCtx.createMediaStreamSource(s);
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 1024;
+        analyser = audioCtx.createAnalyser(); analyser.fftSize = 1024;
         meterSrc.connect(analyser);
       } catch (e) { analyser = null; }
     }
     clearInterval(meterTimer);
     const buf = new Float32Array(1024);
+    let peak = 0, n = 0;
+    // alle 50 ms messen, alle 250 ms den Spitzenwert senden – so gehen kurze Geräusche nicht verloren
     meterTimer = setInterval(() => {
-      let lvl = 0;
       if (analyser) {
         analyser.getFloatTimeDomainData(buf);
         let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
         const db = 20 * Math.log10(Math.sqrt(sum / buf.length) + 1e-8);
-        lvl = Math.max(0, Math.min(100, (db + 70) * 100 / 60)); // -70 dB → 0, -10 dB → 100
+        peak = Math.max(peak, clamp((db + 70) * 100 / 60, 0, 100)); // -70 dB → 0, -10 dB → 100
       }
-      $('camMeter').style.width = lvl + '%';
-      // Pegel dient gleichzeitig als Lebenszeichen für den Monitor
-      for (const m of monitors.values()) { try { if (m.conn.open) m.conn.send({ t: 'lvl', v: Math.round(lvl) }); } catch (e) {} }
-    }, 250);
+      if (++n >= 5) {
+        $('camMeter').style.width = peak + '%';
+        broadcast({ t: 'lvl', v: Math.round(peak) }); // zugleich Lebenszeichen
+        peak = 0; n = 0;
+      }
+    }, 50);
   }
 
+  let restarting = false;
+  function watchTracks(s) {
+    s.getTracks().forEach(t => { t.onended = () => { if (!restarting && document.visibilityState === 'visible') setTimeout(restartStream, 1000); }; });
+  }
   async function restartStream() {
+    if (restarting) return;
+    restarting = true;
     if (stream) stream.getTracks().forEach(t => t.stop());
     try { stream = await getStream(); }
-    catch (e) { camStatus('Kamera-Neustart fehlgeschlagen (' + e.name + ')', 'bad'); return; }
+    catch (e) { restarting = false; camStatus('Kamera-Neustart fehlgeschlagen (' + e.name + ')', 'bad'); setTimeout(restartStream, 5000); return; }
+    restarting = false;
+    watchTracks(stream);
     $('localVideo').srcObject = stream;
     startMeter(stream);
+    await applyVideo();
     for (const m of monitors.values()) {
       const pc = m.call && m.call.peerConnection; if (!pc) continue;
       for (const sender of pc.getSenders()) {
@@ -347,11 +583,10 @@
         if (nt) sender.replaceTrack(nt).catch(() => {});
       }
     }
+    sendState();
   }
 
   $('flip').onclick = () => { facing = facing === 'environment' ? 'user' : 'environment'; store('bp_facing', facing); restartStream(); };
-  $('nightBtn').onclick = () => $('night').classList.add('on');
-  $('night').onclick = () => $('night').classList.remove('on');
   $('camStop').onclick = () => location.reload();
 
   // =====================================================
@@ -360,6 +595,11 @@
   let camId = null, conn = null, call = null, lastBeat = 0, connected = false, everConnected = false;
   let retryTimer = null, soundOn = false, alarmOn = load('bp_alarm') !== '0';
   let threshold = parseInt(load('bp_thr') || '55', 10), lastNoise = 0, lastBeep = 0, lastLostBeep = 0;
+  let camState = null, rot = parseInt(load('bp_rot') || '0', 10), bright = parseInt(load('bp_bright') || '100', 10);
+  let talkStream = null, talkCall = null, talking = false;
+  let events = [], curEv = null, lightDragging = false;
+  let lostActive = false, lostSince = 0, alarmAck = false, connectedAt = 0, hiddenAt = 0;
+  let lastFrames = -1, lastFrameAt = 0, statsBusy = false, tickN = 0;
   const monStatus = (t, c) => setStatus('monDot', 'monStatus', t, c);
 
   function startMonitor(code) {
@@ -367,7 +607,7 @@
     show('mon');
     $('monCode').textContent = '🔑 ' + code;
     camId = PREFIX + code + '-cam';
-    applyThreshold(); applyAlarmBtn();
+    applyThreshold(); applyAlarmBtn(); applyBright(); layoutVideo(); renderLog(); applyCamState(null);
     keepAwake();
     monStatus('Verbinde…', 'warn');
 
@@ -379,17 +619,16 @@
       call = c;
       c.answer(); // nur empfangen
       c.on('stream', s => {
+        lastFrames = -1; lastFrameAt = Date.now();
         const v = $('remoteVideo');
-        v.srcObject = s; v.muted = !soundOn;
+        v.srcObject = s; v.muted = !soundOn || talking;
         v.play().catch(() => {});
         monStatus('Live', 'ok');
       });
       c.on('close', () => { if (call === c) lostConnection('Video beendet'); });
       c.on('error', () => { if (call === c) lostConnection('Videofehler'); });
     });
-    p.on('disconnected', () => {
-      setTimeout(() => { if (!p.destroyed && p.disconnected) p.reconnect(); }, 3000);
-    });
+    p.on('disconnected', () => { setTimeout(() => { if (!p.destroyed && p.disconnected) p.reconnect(); }, 3000); });
     p.on('error', err => {
       if (err.type === 'peer-unavailable') {
         monStatus('Kamera nicht gefunden – läuft sie mit diesem Code?', 'warn');
@@ -398,9 +637,7 @@
       } else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
         monStatus('Kein Signalserver (Internet?) – neuer Versuch…', 'warn');
         scheduleRetry(5000);
-      } else {
-        console.warn('Peer-Fehler', err.type, err);
-      }
+      } else console.warn('Peer-Fehler', err.type, err);
     });
     setInterval(tick, 1000);
   }
@@ -427,32 +664,86 @@
     c.on('data', d => {
       if (conn !== c) return;
       lastBeat = Date.now();
-      if (!connected) { connected = true; everConnected = true; setLost(false); monStatus('Live', 'ok'); }
-      if (d && d.t === 'lvl') onLevel(d.v);
+      if (!connected) { connected = true; everConnected = true; connectedAt = Date.now(); setLost(false); monStatus('Live', 'ok'); }
+      if (!d) return;
+      if (d.t === 'lvl') onLevel(d.v);
+      else if (d.t === 'state') applyCamState(d);
     });
     c.on('close', () => { if (conn === c) lostConnection('Verbindung getrennt'); });
     c.on('error', () => { if (conn === c) lostConnection('Verbindungsfehler'); });
   }
 
   function lostConnection(reason) {
-    connected = false; lastBeat = 0;
+    connected = false; lastBeat = 0; connectedAt = 0; lastFrames = -1; lastFrameAt = 0;
     const c = conn; conn = null; try { c && c.close(); } catch (e) {}
     const k = call; call = null; try { k && k.close(); } catch (e) {}
+    const tc = talkCall; talkCall = null; try { tc && tc.close(); } catch (e) {}
+    if (talking) talkStop();
     $('monMeter').style.width = '0%';
     monStatus(reason + ' – verbinde neu…', 'bad');
-    if (everConnected) setLost(true);
+    if (everConnected) setLost(true, reason);
     scheduleRetry(2000);
   }
+  function fmtDur(ms) {
+    const s = Math.round(ms / 1000);
+    return s < 60 ? s + ' s' : Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' min';
+  }
+  function setLost(on, reason) {
+    if (on && !lostActive) {
+      lostActive = true; lostSince = Date.now(); alarmAck = false; lastLostBeep = 0;
+      document.body.classList.add('lost'); document.body.classList.remove('acked');
+      logConn('⚠️ Verbindung verloren' + (reason ? ' (' + reason + ')' : ''));
+    } else if (!on && lostActive) {
+      const dur = Date.now() - lostSince;
+      lostActive = false; alarmAck = false;
+      document.body.classList.remove('lost', 'acked');
+      logConn('✅ Verbindung wieder da (nach ' + fmtDur(dur) + ')');
+      toast('✅ Verbindung wieder da – war ' + fmtDur(dur) + ' weg');
+      beep(660, 0.12, 1); setTimeout(() => beep(990, 0.18, 1), 160);
+    }
+  }
+  $('ackBtn').onclick = () => { alarmAck = true; document.body.classList.add('acked'); };
+  function alarmBeep() {
+    // Verbindungsalarm piept immer (unabhängig vom Alarm-Ton-Schalter), bis quittiert
+    beep(880, 0.2, 1, 0.9); setTimeout(() => beep(440, 0.35, 1, 0.9), 260);
+    setTimeout(() => beep(880, 0.2, 1, 0.9), 750); setTimeout(() => beep(440, 0.35, 1, 0.9), 1010);
+  }
 
-  function setLost(on) { document.body.classList.toggle('lost', on); }
+  // Bild eingefroren? (Datenkanal lebt, aber keine neuen Videobilder)
+  async function checkMedia() {
+    if (!connected || statsBusy) return;
+    const pc = call && call.peerConnection;
+    if (!pc) { if (connectedAt && Date.now() - connectedAt > 12000) lostConnection('Kein Videobild'); return; }
+    statsBusy = true;
+    try {
+      const st = await pc.getStats();
+      let f = null;
+      st.forEach(r => {
+        if (r.type === 'inbound-rtp' && (r.kind === 'video' || r.mediaType === 'video')) {
+          f = r.framesDecoded != null ? r.framesDecoded : (r.framesReceived != null ? r.framesReceived : f);
+        }
+      });
+      if (f !== null) {
+        if (f !== lastFrames) { lastFrames = f; lastFrameAt = Date.now(); }
+        else if (lastFrameAt && Date.now() - lastFrameAt > 8000) lostConnection('Bild eingefroren');
+      }
+    } catch (e) {} finally { statsBusy = false; }
+  }
+
+  function sendCmd(o) {
+    if (conn && conn.open) { try { conn.send(Object.assign({ t: 'cmd' }, o)); return true; } catch (e) {} }
+    toast('Nicht mit der Kamera verbunden');
+    return false;
+  }
 
   function tick() {
-    if (conn && lastBeat && Date.now() - lastBeat > 5000) {
-      lostConnection('Kein Signal seit ' + Math.round((Date.now() - lastBeat) / 1000) + ' s');
+    if (conn && lastBeat && Date.now() - lastBeat > 5000) lostConnection('Kein Signal seit ' + Math.round((Date.now() - lastBeat) / 1000) + ' s');
+    if (lostActive) {
+      $('lostText').textContent = '⚠️ Keine Verbindung zur Kamera seit ' + fmtDur(Date.now() - lostSince);
+      if (!alarmAck && Date.now() - lastLostBeep > 4000) { lastLostBeep = Date.now(); alarmBeep(); }
     }
-    if (document.body.classList.contains('lost') && alarmOn && Date.now() - lastLostBeep > 6000) {
-      lastLostBeep = Date.now(); beep(440, 0.4, 3);
-    }
+    if (conn && conn.open) { try { conn.send({ t: 'hb' }); } catch (e) {} }
+    if (++tickN % 2 === 0) checkMedia();
     if (lastNoise) {
       const s = Math.round((Date.now() - lastNoise) / 1000);
       $('lastNoise').textContent = 'Letztes Geräusch: ' + (s < 5 ? 'jetzt' : s < 60 ? 'vor ' + s + ' s' : 'vor ' + Math.round(s / 60) + ' min');
@@ -461,14 +752,15 @@
 
   function onLevel(v) {
     $('monMeter').style.width = v + '%';
-    if (v >= threshold) {
+    if (v >= threshold && !talking) {
       lastNoise = Date.now();
+      logNoise(v);
       const f = $('flash'); f.classList.add('on'); clearTimeout(f._t); f._t = setTimeout(() => f.classList.remove('on'), 800);
       if (alarmOn && !soundOn && Date.now() - lastBeep > 4000) { lastBeep = Date.now(); beep(880, 0.2, 2); }
     }
   }
 
-  function beep(freq, dur, times) {
+  function beep(freq, dur, times, vol = 0.6) {
     if (!audioCtx) return;
     try {
       audioCtx.resume();
@@ -478,7 +770,7 @@
         const o = audioCtx.createOscillator(), g = audioCtx.createGain();
         o.frequency.value = freq;
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.6, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
         g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
         o.connect(g).connect(audioCtx.destination);
         o.start(t); o.stop(t + dur + 0.05);
@@ -486,36 +778,163 @@
     } catch (e) {}
   }
 
-  function applyThreshold() {
-    $('thr').value = threshold; $('thrVal').textContent = threshold;
-    $('thrMark').style.left = threshold + '%';
+  // --- Zustand der Kamera anzeigen ---
+  function applyCamState(s) {
+    camState = s;
+    const tb = $('torchBtn'), lb = $('lowBtn');
+    if (!s) { tb.disabled = true; tb.textContent = '🔦 Blitz'; $('monTags').innerHTML = ''; return; }
+    tb.disabled = !s.torchAvail;
+    tb.textContent = !s.torchAvail ? '🔦 Blitz n. verfügbar' : (s.torch ? '🔦 Blitz aus' : '🔦 Blitz an');
+    tb.classList.toggle('on', !!s.torch);
+    lb.textContent = s.lowlight ? '🌙 Dunkel-Modus an' : '🌙 Dunkel-Modus';
+    lb.classList.toggle('on', !!s.lowlight);
+    if (!lightDragging) { $('lightRange').value = s.light; }
+    $('lightVal').textContent = s.light > 0 ? s.light + ' %' : 'aus';
+    $('noiseType').value = s.noise;
+    $('noiseVol').value = s.noiseVol; $('noiseVolVal').textContent = s.noiseVol + ' %';
+    $('noiseMin').value = String(s.noiseMin);
+    $('noiseInfo').textContent = s.noise === 'off'
+      ? 'Das Mikrofon hört das Rauschen mit – Alarm-Schwelle ggf. höher stellen.'
+      : 'Läuft' + (s.noiseEnds ? ' bis ' + new Date(s.noiseEnds).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : ' dauerhaft') + '. Alarm-Schwelle ggf. höher stellen.';
+    const tags = [];
+    if (s.torch) tags.push('<span class="tag">🔦 Blitz an</span>');
+    if (s.light > 0) tags.push('<span class="tag">💡 Nachtlicht ' + s.light + ' %</span>');
+    if (s.lowlight) tags.push('<span class="tag">🌙 Dunkel-Modus</span>');
+    if (s.noise !== 'off') tags.push('<span class="tag">🌊 Rauschen</span>');
+    $('monTags').innerHTML = tags.join('');
   }
-  function applyAlarmBtn() {
-    $('alarmBtn').textContent = alarmOn ? '🔔 Alarm-Ton an' : '🔕 Alarm-Ton aus';
-    $('alarmBtn').classList.toggle('on', alarmOn);
+
+  // --- Steuerung ---
+  $('torchBtn').onclick = () => sendCmd({ torch: !(camState && camState.torch) });
+  $('lowBtn').onclick = () => sendCmd({ lowlight: !(camState && camState.lowlight) });
+  const sendLight = throttle(v => sendCmd({ light: v }), 250);
+  $('lightRange').addEventListener('input', e => { lightDragging = true; const v = +e.target.value; $('lightVal').textContent = v > 0 ? v + ' %' : 'aus'; sendLight(v); });
+  $('lightRange').addEventListener('change', e => { lightDragging = false; sendCmd({ light: +e.target.value }); });
+  function sendNoise() { sendCmd({ noise: $('noiseType').value, vol: +$('noiseVol').value, minutes: +$('noiseMin').value }); }
+  const sendNoiseT = throttle(sendNoise, 300);
+  $('noiseType').onchange = sendNoise;
+  $('noiseMin').onchange = sendNoise;
+  $('noiseVol').addEventListener('input', e => { $('noiseVolVal').textContent = e.target.value + ' %'; if ($('noiseType').value !== 'off') sendNoiseT(); });
+
+  function applyBright() {
+    $('brightRange').value = bright; $('brightVal').textContent = bright === 100 ? 'normal' : bright + ' %';
+    $('remoteVideo').style.filter = bright === 100 ? '' : 'brightness(' + bright / 100 + ') contrast(1.15)';
   }
+  $('brightRange').addEventListener('input', e => { bright = +e.target.value; store('bp_bright', bright); applyBright(); });
+
+  function layoutVideo() {
+    const st = $('stage'), v = $('remoteVideo');
+    const W = st.clientWidth, H = st.clientHeight, side = rot % 180 !== 0;
+    v.style.width = (side ? H : W) + 'px';
+    v.style.height = (side ? W : H) + 'px';
+    v.style.transform = 'translate(-50%,-50%) rotate(' + rot + 'deg)';
+  }
+  $('rotBtn').onclick = () => { rot = (rot + 90) % 360; store('bp_rot', rot); layoutVideo(); };
+  window.addEventListener('resize', () => { if (role === 'mon') layoutVideo(); });
+
+  function applyThreshold() { $('thr').value = threshold; $('thrVal').textContent = threshold; $('thrMark').style.left = threshold + '%'; }
+  function applyAlarmBtn() { $('alarmBtn').textContent = alarmOn ? '🔔 Alarm-Ton an' : '🔕 Alarm-Ton aus'; $('alarmBtn').classList.toggle('on', alarmOn); }
   $('thr').oninput = e => { threshold = parseInt(e.target.value, 10); store('bp_thr', threshold); applyThreshold(); };
   $('alarmBtn').onclick = () => { makeAudioCtx(); alarmOn = !alarmOn; store('bp_alarm', alarmOn ? '1' : '0'); applyAlarmBtn(); if (alarmOn) beep(880, 0.15, 1); };
   $('soundBtn').onclick = () => {
     makeAudioCtx();
     soundOn = !soundOn;
-    const v = $('remoteVideo'); v.muted = !soundOn; v.play().catch(() => {});
+    const v = $('remoteVideo'); v.muted = !soundOn || talking; v.play().catch(() => {});
     $('soundBtn').textContent = soundOn ? '🔊 Ton aus' : '🔇 Ton an';
     $('soundBtn').classList.toggle('on', soundOn);
     $('tapSound').style.display = soundOn ? 'none' : 'flex';
   };
   $('monStop').onclick = () => location.reload();
 
+  // --- Gegensprechen (Push-to-Talk) ---
+  function resetTalkBtn() { const b = $('talkBtn'); b.classList.remove('active'); b.textContent = '🎙️ Gedrückt halten zum Sprechen'; }
+  async function talkStart(e) {
+    e.preventDefault();
+    if (talking) return;
+    if (!connected) { toast('Nicht mit der Kamera verbunden'); return; }
+    talking = true;
+    const b = $('talkBtn'); b.classList.add('active'); b.textContent = '🎙️ Du sprichst – loslassen zum Beenden';
+    try {
+      if (!talkStream) {
+        setAudioSession('play-and-record');
+        talkStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        talkStream.getAudioTracks().forEach(t => { t.enabled = false; });
+        makeAudioCtx();
+        $('remoteVideo').play().catch(() => {});
+      }
+      if (!talkCall && peer && peer.open) {
+        const tc = peer.call(camId, talkStream);
+        talkCall = tc;
+        tc.on('close', () => { if (talkCall === tc) talkCall = null; });
+        tc.on('error', () => { if (talkCall === tc) talkCall = null; });
+      }
+    } catch (err) {
+      talking = false; resetTalkBtn();
+      toast('Mikrofon nicht verfügbar (' + err.name + ')');
+      return;
+    }
+    if (!talking) return; // während der Berechtigungsabfrage losgelassen
+    talkStream.getAudioTracks().forEach(t => { t.enabled = true; });
+    $('remoteVideo').muted = true; // keine Rückkopplung
+    sendCmd({ talk: true });
+  }
+  function talkStop() {
+    if (!talking) return;
+    talking = false; resetTalkBtn();
+    if (talkStream) talkStream.getAudioTracks().forEach(t => { t.enabled = false; });
+    $('remoteVideo').muted = !soundOn;
+    if (conn && conn.open) sendCmd({ talk: false });
+  }
+  const tb = $('talkBtn');
+  tb.addEventListener('pointerdown', talkStart);
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => tb.addEventListener(ev, talkStop));
+  tb.addEventListener('contextmenu', e => e.preventDefault());
+
+  // --- Geräusch-Protokoll ---
+  function logNoise(v) {
+    const now = Date.now();
+    if (!curEv || now - curEv.last > 15000) {
+      curEv = { start: now, last: now, peak: v };
+      events.unshift(curEv); if (events.length > 60) events.pop();
+    } else { curEv.last = now; if (v > curEv.peak) curEv.peak = v; }
+    renderLogSoon();
+  }
+  function logConn(text) {
+    curEv = null;
+    events.unshift({ start: Date.now(), text });
+    if (events.length > 60) events.pop();
+    renderLog();
+  }
+  function renderLog() {
+    $('logCount').textContent = events.length;
+    $('log').innerHTML = events.length ? events.map(e => {
+      const t = new Date(e.start).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+      if (e.text) return '<div><b>' + t + ' · ' + e.text + '</b></div>';
+      const dur = Math.max(1, Math.round((e.last - e.start) / 1000));
+      return '<div>' + t + ' · ' + (dur < 60 ? dur + ' s' : Math.round(dur / 60) + ' min') + ' · Spitze ' + e.peak + '</div>';
+    }).join('') : '<div class="hint">Noch keine Geräusche über der Schwelle.</div>';
+  }
+  const renderLogSoon = throttle(renderLog, 1000);
+  $('logClear').onclick = () => { events = []; curEv = null; renderLog(); };
+
   // ---------- App kommt zurück in den Vordergrund ----------
   document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState !== 'visible') return;
+    if (document.visibilityState !== 'visible') { hiddenAt = Date.now(); return; }
+    if (role === 'mon' && hiddenAt) {
+      const gap = Date.now() - hiddenAt; hiddenAt = 0;
+      if (gap > 5000) {
+        logConn('⏸️ Monitor war ' + fmtDur(gap) + ' inaktiv – keine Überwachung');
+        toast('⚠️ Monitor war ' + fmtDur(gap) + ' inaktiv – in der Zeit keine Überwachung!', 8000);
+      }
+      if (connected) { lastBeat = Date.now(); lastFrameAt = Date.now(); } // Schonfrist zum Wiederverbinden statt sofortigem Alarm
+    }
     keepAwake();
     if (audioCtx) audioCtx.resume();
     if (role === 'cam' && stream) {
       if (stream.getTracks().some(t => t.readyState === 'ended')) await restartStream();
       if (peer && !peer.destroyed && peer.disconnected) peer.reconnect();
     }
-    if (role === 'mon' && !connected) scheduleRetry(0);
+    if (role === 'mon') { if (!connected) scheduleRetry(0); layoutVideo(); }
   });
 })();
 </script>
