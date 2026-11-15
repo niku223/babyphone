@@ -60,6 +60,8 @@
   #toast{position:fixed;left:50%;bottom:calc(var(--sb) + 24px);transform:translateX(-50%);background:#000;color:#fff;
     padding:10px 14px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .3s;z-index:100;pointer-events:none}
   #toast.on{opacity:.92}
+  #toast{max-width:90vw;text-align:center}
+  body.fs #toast{bottom:calc(var(--sb) + 150px)}
 
   /* Kamera */
   #localVideo{width:100%;max-height:36vh;object-fit:cover;border-radius:16px;background:#000}
@@ -88,8 +90,25 @@
   @keyframes pulse{50%{opacity:.6}}
   #tapSound{position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;z-index:2;pointer-events:none}
   #tapSound span{background:rgba(0,0,0,.6);padding:8px 12px;border-radius:12px;font-size:13px}
-  #talkBtn{width:100%;padding:18px;font-size:17px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none}
-  #talkBtn.active{background:var(--bad);color:#fff;border-color:transparent}
+  #talkBtn,#fsTalk{padding:18px;font-size:17px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none}
+  #talkBtn{width:100%}
+  #talkBtn.active,#fsTalk.active{background:var(--bad);color:#fff;border-color:transparent}
+
+  /* Vollbild (eigenes Vollbild – Warnungen bleiben sichtbar) */
+  #fsBar{display:none;position:absolute;left:0;right:0;bottom:0;z-index:4;flex-direction:column;gap:10px;
+    padding:28px 12px calc(var(--sb) + 12px);background:linear-gradient(transparent,rgba(0,0,0,.8));transition:opacity .3s}
+  #fsBar .row button{flex:none;min-width:56px;font-size:20px;padding:14px}
+  #fsBar #fsTalk{flex:1;font-size:16px}
+  body.fs #fsBar{display:flex}
+  body.fs #stage{position:fixed;inset:0;height:auto;z-index:40}
+  body.fs #monPanel{display:none}
+  body.fs #tapSound{display:none}
+  body.fs.hidectl #fsBar{opacity:0;pointer-events:none}
+  body.fs.lost #fsBar{opacity:1;pointer-events:auto}
+  body.fs #lostBanner{top:50%;bottom:auto;transform:translateY(-50%);font-size:20px;padding:22px}
+  #lostFrame{display:none;position:absolute;inset:0;border:8px solid var(--bad);z-index:3;pointer-events:none;animation:pulse 1s infinite}
+  body.lost #lostFrame{display:block}
+  body.lost.acked #lostFrame{animation:none}
   #log{font:13px/1.5 ui-monospace,Menlo,monospace;display:flex;flex-direction:column;max-height:200px;overflow:auto}
 </style>
 </head>
@@ -153,7 +172,16 @@
       <span class="pill"><span id="monDot" class="dot"></span><span id="monStatus">Startet…</span></span>
       <span class="pill" id="monCode"></span>
     </div>
+    <div id="lostFrame"></div>
     <div id="lostBanner"><span id="lostText">⚠️ Keine Verbindung zur Kamera</span><button id="ackBtn">🔕 Alarm stumm</button></div>
+    <div id="fsBar">
+      <div class="meter"><i id="fsMeter"></i><b id="fsThr"></b></div>
+      <div class="row">
+        <button id="fsSound" title="Ton">🔇</button>
+        <button id="fsTalk">🎙️ Halten zum Sprechen</button>
+        <button id="fsExit" title="Vollbild beenden">✕</button>
+      </div>
+    </div>
   </div>
 
   <div id="monPanel">
@@ -171,6 +199,7 @@
       <button id="alarmBtn">🔔 Alarm-Ton</button>
     </div>
     <button id="talkBtn">🎙️ Gedrückt halten zum Sprechen</button>
+    <button id="fsBtn">⛶ Vollbild</button>
 
     <details class="card">
       <summary>💡 Licht &amp; Bild</summary>
@@ -679,7 +708,7 @@
     const k = call; call = null; try { k && k.close(); } catch (e) {}
     const tc = talkCall; talkCall = null; try { tc && tc.close(); } catch (e) {}
     if (talking) talkStop();
-    $('monMeter').style.width = '0%';
+    $('monMeter').style.width = '0%'; $('fsMeter').style.width = '0%';
     monStatus(reason + ' – verbinde neu…', 'bad');
     if (everConnected) setLost(true, reason);
     scheduleRetry(2000);
@@ -752,6 +781,7 @@
 
   function onLevel(v) {
     $('monMeter').style.width = v + '%';
+    $('fsMeter').style.width = v + '%';
     if (v >= threshold && !talking) {
       lastNoise = Date.now();
       logNoise(v);
@@ -832,28 +862,38 @@
   $('rotBtn').onclick = () => { rot = (rot + 90) % 360; store('bp_rot', rot); layoutVideo(); };
   window.addEventListener('resize', () => { if (role === 'mon') layoutVideo(); });
 
-  function applyThreshold() { $('thr').value = threshold; $('thrVal').textContent = threshold; $('thrMark').style.left = threshold + '%'; }
+  function applyThreshold() { $('thr').value = threshold; $('thrVal').textContent = threshold; $('thrMark').style.left = threshold + '%'; $('fsThr').style.left = threshold + '%'; }
   function applyAlarmBtn() { $('alarmBtn').textContent = alarmOn ? '🔔 Alarm-Ton an' : '🔕 Alarm-Ton aus'; $('alarmBtn').classList.toggle('on', alarmOn); }
   $('thr').oninput = e => { threshold = parseInt(e.target.value, 10); store('bp_thr', threshold); applyThreshold(); };
   $('alarmBtn').onclick = () => { makeAudioCtx(); alarmOn = !alarmOn; store('bp_alarm', alarmOn ? '1' : '0'); applyAlarmBtn(); if (alarmOn) beep(880, 0.15, 1); };
-  $('soundBtn').onclick = () => {
+  function toggleSound() {
     makeAudioCtx();
     soundOn = !soundOn;
     const v = $('remoteVideo'); v.muted = !soundOn || talking; v.play().catch(() => {});
     $('soundBtn').textContent = soundOn ? '🔊 Ton aus' : '🔇 Ton an';
     $('soundBtn').classList.toggle('on', soundOn);
+    $('fsSound').textContent = soundOn ? '🔊' : '🔇';
+    $('fsSound').classList.toggle('on', soundOn);
     $('tapSound').style.display = soundOn ? 'none' : 'flex';
-  };
+  }
+  $('soundBtn').onclick = toggleSound;
+  $('fsSound').onclick = e => { e.stopPropagation(); toggleSound(); showCtl(); };
   $('monStop').onclick = () => location.reload();
 
   // --- Gegensprechen (Push-to-Talk) ---
-  function resetTalkBtn() { const b = $('talkBtn'); b.classList.remove('active'); b.textContent = '🎙️ Gedrückt halten zum Sprechen'; }
+  function setTalkUI(active) {
+    $('talkBtn').classList.toggle('active', active); $('fsTalk').classList.toggle('active', active);
+    $('talkBtn').textContent = active ? '🎙️ Du sprichst – loslassen zum Beenden' : '🎙️ Gedrückt halten zum Sprechen';
+    $('fsTalk').textContent = active ? '🎙️ Du sprichst…' : '🎙️ Halten zum Sprechen';
+  }
+  function resetTalkBtn() { setTalkUI(false); }
   async function talkStart(e) {
     e.preventDefault();
     if (talking) return;
     if (!connected) { toast('Nicht mit der Kamera verbunden'); return; }
     talking = true;
-    const b = $('talkBtn'); b.classList.add('active'); b.textContent = '🎙️ Du sprichst – loslassen zum Beenden';
+    setTalkUI(true);
+    if (document.body.classList.contains('fs')) showCtl();
     try {
       if (!talkStream) {
         setAudioSession('play-and-record');
@@ -885,10 +925,51 @@
     $('remoteVideo').muted = !soundOn;
     if (conn && conn.open) sendCmd({ talk: false });
   }
-  const tb = $('talkBtn');
-  tb.addEventListener('pointerdown', talkStart);
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => tb.addEventListener(ev, talkStop));
-  tb.addEventListener('contextmenu', e => e.preventDefault());
+  ['talkBtn', 'fsTalk'].forEach(id => {
+    const tb = $(id);
+    tb.addEventListener('pointerdown', talkStart);
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => tb.addEventListener(ev, talkStop));
+    tb.addEventListener('contextmenu', e => e.preventDefault());
+    tb.addEventListener('click', e => e.stopPropagation());
+  });
+
+  // --- Vollbild ---
+  // iPhone-Safari kennt kein echtes Vollbild für Webseiten → eigenes Vollbild in der Seite,
+  // damit Verbindungswarnung, Alarm-Rahmen und Bedienknöpfe sichtbar bleiben.
+  let ctlTimer = null;
+  function showCtl() {
+    document.body.classList.remove('hidectl');
+    clearTimeout(ctlTimer);
+    ctlTimer = setTimeout(() => { if (!talking) document.body.classList.add('hidectl'); }, 5000);
+  }
+  function enterFs() {
+    document.body.classList.add('fs');
+    showCtl();
+    const el = document.documentElement, rf = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (rf) { try { const r = rf.call(el); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+    else if (!navigator.standalone) toast('Tipp: Ganz ohne Safari-Leisten geht es über Teilen → „Zum Home-Bildschirm“', 6000);
+    setTimeout(layoutVideo, 50); setTimeout(layoutVideo, 400);
+  }
+  function exitFs() {
+    document.body.classList.remove('fs', 'hidectl');
+    clearTimeout(ctlTimer);
+    const d = document;
+    if (d.fullscreenElement || d.webkitFullscreenElement) {
+      const ex = d.exitFullscreen || d.webkitExitFullscreen;
+      try { const r = ex.call(d); if (r && r.catch) r.catch(() => {}); } catch (e) {}
+    }
+    setTimeout(layoutVideo, 50); setTimeout(layoutVideo, 400);
+  }
+  $('fsBtn').onclick = enterFs;
+  $('fsExit').onclick = e => { e.stopPropagation(); exitFs(); };
+  $('stage').addEventListener('click', e => {
+    if (!document.body.classList.contains('fs') || e.target.closest('button')) return;
+    if (document.body.classList.contains('hidectl')) showCtl();
+    else { clearTimeout(ctlTimer); document.body.classList.add('hidectl'); }
+  });
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev => document.addEventListener(ev, () => {
+    if (!(document.fullscreenElement || document.webkitFullscreenElement) && document.body.classList.contains('fs')) exitFs();
+  }));
 
   // --- Geräusch-Protokoll ---
   function logNoise(v) {
