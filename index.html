@@ -135,7 +135,10 @@
   /* Monitor */
   #mon.on{padding:0;gap:0;height:100vh;height:100dvh;min-height:0}
   #stage{position:relative;flex:none;height:46vh;height:46dvh;background:#000;overflow:hidden}
-  #remoteVideo{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);object-fit:contain;background:#000}
+  #remoteVideo,#nvCanvas{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);object-fit:contain;background:#000}
+  #nvCanvas{display:none}
+  body.nv #nvCanvas{display:block}
+  body.nv #remoteVideo{opacity:.01}
   #monTop{position:absolute;top:calc(var(--st) + 10px);left:10px;right:10px;display:flex;justify-content:space-between;gap:8px;z-index:2}
   #monPanel{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:14px 16px calc(var(--sb) + 18px);background:var(--bg);
     border-top:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
@@ -160,7 +163,7 @@
   #fsBar{display:none;position:absolute;left:0;right:0;bottom:0;z-index:4;flex-direction:column;gap:10px;
     padding:28px 12px calc(var(--sb) + 12px);background:linear-gradient(transparent,rgba(0,0,0,.8));transition:opacity .3s}
   #fsBar .row button{flex:none;min-width:56px;font-size:20px;padding:14px}
-  #fsBar #fsTalk{flex:1;font-size:16px}
+  #fsBar #fsTalk{flex:1;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:8px;padding-right:8px}
   body.fs #fsBar{display:flex}
   body.fs #stage{position:fixed;inset:0;height:auto;z-index:40}
   body.fs #monPanel{display:none}
@@ -228,6 +231,7 @@
 <section id="mon" class="screen">
   <div id="stage">
     <video id="remoteVideo" playsinline autoplay muted></video>
+    <canvas id="nvCanvas"></canvas>
     <div id="flash"></div>
     <div id="tapSound"><span>🔇 Ton ist aus – unten „Ton an“ tippen</span></div>
     <div id="monTop">
@@ -240,6 +244,7 @@
       <div class="meter"><i id="fsMeter"></i><b id="fsThr"></b></div>
       <div class="row">
         <button id="fsSound" title="Ton">🔇</button>
+        <button id="fsNv" title="Nachtsicht">🌙</button>
         <button id="fsTalk">🎙️ Halten zum Sprechen</button>
         <button id="fsExit" title="Vollbild beenden">✕</button>
       </div>
@@ -272,10 +277,11 @@
           <input id="lightRange" type="range" min="0" max="100" step="5" value="0">
         </div>
         <div class="grid2">
-          <button id="lowBtn">🌙 Dunkel-Modus</button>
+          <button id="nvBtn">🌙 Nachtsicht</button>
           <button id="torchBtn" disabled>🔦 Blitz</button>
         </div>
-        <p class="hint" style="margin:0">Dunkel-Modus: Kamera belichtet länger (heller, aber ruckeliger). Blitz ist sehr grell – nur kurz zum Nachschauen.</p>
+        <p class="hint" style="margin:0;color:var(--warn)" id="torchInfo"></p>
+        <p class="hint" style="margin:0">Nachtsicht: legt mehrere Bilder übereinander (weniger Rauschen) und hellt stark auf – Bewegungen wirken leicht verwischt. Läuft nur hier am Monitor. Blitz ist sehr grell – nur kurz zum Nachschauen.</p>
         <div>
           <label for="brightRange">Bild aufhellen (nur hier am Monitor): <span id="brightVal"></span></label>
           <input id="brightRange" type="range" min="100" max="300" step="10" value="100">
@@ -402,7 +408,8 @@
   let meterSrc = null, analyser = null, meterTimer = null;
   let noiseSrc = null, noiseGain = null, noiseTimer = null;
   const monitors = new Map();
-  const cs = { torch: false, torchAvail: false, light: 0, noise: 'off', noiseVol: 40, noiseMin: 30, noiseEnds: 0, lowlight: false, talk: false };
+  const IOS_VER = (() => { const m = navigator.userAgent.match(/OS (\d+)[_.](\d+)/); return m && /iPhone|iPad|iPod/.test(navigator.userAgent) ? parseFloat(m[1] + '.' + m[2]) : 0; })();
+  const cs = { torch: false, torchAvail: false, torchConfirmed: false, torchErr: '', ios: IOS_VER, facing: '', light: 0, noise: 'off', noiseVol: 40, noiseMin: 30, noiseEnds: 0, lowlight: false, talk: false };
   const camStatus = (t, c) => setStatus('camDot', 'camStatus', t, c);
 
   function videoConstraints(withFacing) {
@@ -519,7 +526,7 @@
   function sendState() { broadcast(Object.assign({ t: 'state' }, cs)); updateCamUI(); }
 
   async function onCmd(d) {
-    if ('torch' in d) { cs.torch = !!d.torch; await applyVideo(); }
+    if ('torch' in d) { cs.torch = !!d.torch; cs.torchErr = ''; await applyVideo(); }
     if ('lowlight' in d) { cs.lowlight = !!d.lowlight; await applyVideo(); }
     if ('light' in d) setLight(+d.light || 0);
     if ('noise' in d) setNoise(String(d.noise), +d.vol, +d.minutes);
@@ -533,16 +540,26 @@
     if (!vt) return;
     let caps = {};
     try { caps = vt.getCapabilities ? vt.getCapabilities() : {}; } catch (e) {}
-    cs.torchAvail = caps.torch === true || (Array.isArray(caps.torch) && caps.torch.includes(true));
+    // Safari meldet den Blitz oft NICHT in getCapabilities(), schaltet ihn aber ab iOS 17 trotzdem.
+    // Daher: auf iPhone mit Rückkamera und iOS ≥ 17 einfach versuchen.
+    const capsTorch = caps.torch === true || (Array.isArray(caps.torch) && caps.torch.includes(true));
+    cs.facing = facing;
+    cs.torchConfirmed = capsTorch;
+    cs.torchAvail = capsTorch || (IOS_VER >= 17 && facing === 'environment');
     if (!cs.torchAvail) cs.torch = false;
     const c = videoConstraints(false);
     if (cs.torchAvail) c.advanced = [{ torch: cs.torch }];
     try { await vt.applyConstraints(c); }
     catch (e) {
       console.warn('applyConstraints', e);
-      if (cs.torch) { cs.torch = false; try { await vt.applyConstraints(videoConstraints(false)); } catch (_) {} }
+      if (cs.torch) {
+        // zweiter Versuch: nur den Blitz setzen
+        try { await vt.applyConstraints({ advanced: [{ torch: true }] }); }
+        catch (e2) { cs.torch = false; cs.torchErr = e2.name || 'Fehler'; try { await vt.applyConstraints(videoConstraints(false)); } catch (__) {} }
+      }
     }
-    try { const s = vt.getSettings(); if (typeof s.torch === 'boolean') cs.torch = s.torch; } catch (e) {}
+    // getSettings().torch ist unter iOS 18 fehlerhaft (meldet „aus“, obwohl an) → nur nutzen, wenn der Browser den Blitz offiziell meldet
+    if (capsTorch) { try { const st = vt.getSettings(); if (typeof st.torch === 'boolean') cs.torch = st.torch; } catch (e) {} }
   }
 
   // Nachtlicht = Display leuchtet warm
@@ -687,6 +704,7 @@
   let camId = null, conn = null, call = null, lastBeat = 0, connected = false, everConnected = false;
   let retryTimer = null, soundOn = false, alarmOn = load('bp_alarm') !== '0';
   let threshold = parseInt(load('bp_thr') || '55', 10), lastNoise = 0, lastBeep = 0, lastLostBeep = 0;
+  let torchHintShown = false;
   let camState = null, rot = parseInt(load('bp_rot') || '0', 10), bright = parseInt(load('bp_bright') || '100', 10);
   let talkStream = null, talkCall = null, talking = false;
   let events = [], curEv = null, lightDragging = false;
@@ -699,7 +717,7 @@
     show('mon');
     $('monCode').textContent = '🔑 ' + code;
     camId = PREFIX + code + '-cam';
-    applyThreshold(); applyAlarmBtn(); applyBright(); layoutVideo(); renderLog(); applyCamState(null);
+    applyThreshold(); applyAlarmBtn(); applyBright(); applyNv(); layoutVideo(); renderLog(); applyCamState(null);
     keepAwake();
     monStatus('Verbinde…', 'warn');
 
@@ -893,13 +911,19 @@
   // --- Zustand der Kamera anzeigen ---
   function applyCamState(s) {
     camState = s;
-    const tb = $('torchBtn'), lb = $('lowBtn');
+    const tb = $('torchBtn');
     if (!s) { tb.disabled = true; tb.textContent = '🔦 Blitz'; $('monTags').innerHTML = ''; return; }
     tb.disabled = !s.torchAvail;
     tb.textContent = !s.torchAvail ? '🔦 Blitz n. verfügbar' : (s.torch ? '🔦 Blitz aus' : '🔦 Blitz an');
     tb.classList.toggle('on', !!s.torch);
-    lb.textContent = s.lowlight ? '🌙 Dunkel-Modus an' : '🌙 Dunkel-Modus';
-    lb.classList.toggle('on', !!s.lowlight);
+    $('torchInfo').textContent = s.torchAvail ? (s.torchErr ? 'Blitz ließ sich nicht einschalten (' + s.torchErr + ') – das Kamera-iPhone unterstützt ihn per Webseite nicht.' : '')
+      : s.facing === 'user' ? 'Blitz geht nur mit der Rückkamera – am Kamera-iPhone „Kamera wechseln“.'
+      : s.ios && s.ios < 17 ? 'Blitz per Webseite erst ab iOS 17 – das Kamera-iPhone hat iOS ' + s.ios + '.'
+      : 'Das Kamera-Gerät gibt den Blitz für Webseiten nicht frei.';
+    if (s.torch && !s.torchConfirmed && !torchHintShown) {
+      torchHintShown = true;
+      toast('Blitz angefordert – leuchtet nichts, unterstützt dieses iPhone/iOS ihn per Webseite nicht.', 6000);
+    }
     if (!lightDragging) { $('lightRange').value = s.light; }
     $('lightVal').textContent = s.light > 0 ? s.light + ' %' : 'aus';
     $('noiseType').value = s.noise;
@@ -911,14 +935,13 @@
     const tags = [];
     if (s.torch) tags.push('<span class="tag">🔦 Blitz an</span>');
     if (s.light > 0) tags.push('<span class="tag">💡 Nachtlicht ' + s.light + ' %</span>');
-    if (s.lowlight) tags.push('<span class="tag">🌙 Dunkel-Modus</span>');
     if (s.noise !== 'off') tags.push('<span class="tag">🌊 Rauschen</span>');
     $('monTags').innerHTML = tags.join('');
   }
 
   // --- Steuerung ---
   $('torchBtn').onclick = () => sendCmd({ torch: !(camState && camState.torch) });
-  $('lowBtn').onclick = () => sendCmd({ lowlight: !(camState && camState.lowlight) });
+
   const sendLight = throttle(v => sendCmd({ light: v }), 250);
   $('lightRange').addEventListener('input', e => { lightDragging = true; const v = +e.target.value; $('lightVal').textContent = v > 0 ? v + ' %' : 'aus'; sendLight(v); });
   $('lightRange').addEventListener('change', e => { lightDragging = false; sendCmd({ light: +e.target.value }); });
@@ -932,14 +955,64 @@
     $('brightRange').value = bright; $('brightVal').textContent = bright === 100 ? 'normal' : bright + ' %';
     $('remoteVideo').style.filter = bright === 100 ? '' : 'brightness(' + bright / 100 + ') contrast(1.15)';
   }
+
+  // --- Nachtsicht (läuft komplett am Monitor) ---
+  // 1. Rauschen mitteln: jedes neue Bild fließt nur zu 25 % ein (gleitender Mittelwert, in Fließkomma – keine Rundungsverluste).
+  // 2. Automatische Verstärkung: Bild wird auf eine Zielhelligkeit gebracht (Regler „Bild aufhellen“ verschiebt das Ziel).
+  // 3. Dunkle Töne anheben (Gamma) und Farbe dämpfen, weil Farbrauschen im Dunkeln am meisten stört.
+  const NV_W = 480;
+  const NV_GAMMA = new Uint8Array(256).map((_, i) => Math.round(255 * Math.pow(i / 255, 0.7)));
+  let nvOn = load('bp_nv') === '1', nvTimer = null, nvAcc = null, nvWork = null, nvWctx = null, nvGain = 3;
+  function nvStep() {
+    const v = $('remoteVideo'), c = $('nvCanvas');
+    if (!v.videoWidth || v.readyState < 2) return;
+    const sc = Math.min(1, NV_W / v.videoWidth);
+    const w = Math.round(v.videoWidth * sc), h = Math.round(v.videoHeight * sc);
+    if (!nvWork) nvWork = document.createElement('canvas');
+    if (nvWork.width !== w || nvWork.height !== h || !nvWctx) {
+      nvWork.width = w; nvWork.height = h; c.width = w; c.height = h;
+      nvWctx = nvWork.getContext('2d', { willReadFrequently: true }); nvAcc = null;
+    }
+    let img;
+    try { nvWctx.drawImage(v, 0, 0, w, h); img = nvWctx.getImageData(0, 0, w, h); } catch (e) { return; }
+    const d = img.data, n = d.length;
+    if (!nvAcc) { nvAcc = new Float32Array(n); for (let i = 0; i < n; i++) nvAcc[i] = d[i]; }
+    else for (let i = 0; i < n; i++) nvAcc[i] += (d[i] - nvAcc[i]) * 0.25;
+    let sum = 0, cnt = 0;
+    for (let i = 0; i < n; i += 64) { sum += 0.299 * nvAcc[i] + 0.587 * nvAcc[i + 1] + 0.114 * nvAcc[i + 2]; cnt++; }
+    const target = 75 * bright / 100;
+    nvGain += (clamp(target / Math.max(sum / cnt, 0.5), 1, 16) - nvGain) * 0.15;
+    const g = nvGain;
+    for (let i = 0; i < n; i += 4) {
+      const r = nvAcc[i] * g, gr = nvAcc[i + 1] * g, b = nvAcc[i + 2] * g;
+      const L = 0.299 * r + 0.587 * gr + 0.114 * b;
+      d[i] = NV_GAMMA[Math.min(255, (L + (r - L) * 0.35) | 0)];
+      d[i + 1] = NV_GAMMA[Math.min(255, (L + (gr - L) * 0.35) | 0)];
+      d[i + 2] = NV_GAMMA[Math.min(255, (L + (b - L) * 0.35) | 0)];
+    }
+    c.getContext('2d').putImageData(img, 0, 0);
+  }
+  function applyNv() {
+    document.body.classList.toggle('nv', nvOn);
+    $('nvBtn').textContent = nvOn ? '🌙 Nachtsicht an' : '🌙 Nachtsicht';
+    $('nvBtn').classList.toggle('on', nvOn);
+    $('fsNv').classList.toggle('on', nvOn);
+    clearInterval(nvTimer); nvTimer = null;
+    if (nvOn) { nvAcc = null; nvTimer = setInterval(nvStep, 66); } // ~15 Bilder/s
+  }
+  function toggleNv() { nvOn = !nvOn; store('bp_nv', nvOn ? '1' : '0'); applyNv(); }
+  $('nvBtn').onclick = toggleNv;
+  $('fsNv').onclick = e => { e.stopPropagation(); toggleNv(); showCtl(); };
   $('brightRange').addEventListener('input', e => { bright = +e.target.value; store('bp_bright', bright); applyBright(); });
 
   function layoutVideo() {
-    const st = $('stage'), v = $('remoteVideo');
+    const st = $('stage');
     const W = st.clientWidth, H = st.clientHeight, side = rot % 180 !== 0;
-    v.style.width = (side ? H : W) + 'px';
-    v.style.height = (side ? W : H) + 'px';
-    v.style.transform = 'translate(-50%,-50%) rotate(' + rot + 'deg)';
+    [$('remoteVideo'), $('nvCanvas')].forEach(v => {
+      v.style.width = (side ? H : W) + 'px';
+      v.style.height = (side ? W : H) + 'px';
+      v.style.transform = 'translate(-50%,-50%) rotate(' + rot + 'deg)';
+    });
   }
   $('rotBtn').onclick = () => { rot = (rot + 90) % 360; store('bp_rot', rot); layoutVideo(); };
   window.addEventListener('resize', () => { if (role === 'mon') layoutVideo(); });
@@ -1009,7 +1082,7 @@
   }
   ['talkBtn', 'fsTalk'].forEach(id => {
     const tb = $(id);
-    tb.addEventListener('pointerdown', talkStart);
+    tb.addEventListener('pointerdown', e => { try { tb.setPointerCapture(e.pointerId); } catch (_) {} talkStart(e); });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => tb.addEventListener(ev, talkStop));
     tb.addEventListener('contextmenu', e => e.preventDefault());
     tb.addEventListener('click', e => e.stopPropagation());
