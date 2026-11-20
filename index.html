@@ -110,6 +110,25 @@
   .meter>i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--ok),var(--warn) 70%,var(--bad));transition:width .2s}
   .meter>b{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;opacity:.8}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+  /* Schalter (Zustand statt Aktion): AUS = grau/rot, AN = grün, mit Schiebeschalter wie in den iPhone-Einstellungen */
+  .swstack{display:flex;flex-direction:column;gap:10px}
+  .hide{display:none!important}
+  .sw{display:flex;align-items:center;gap:10px;text-align:left;padding:12px;border:2px solid #4a2b2f;background:#1d1a1f;min-height:64px}
+  .sw .sw-ico{font-size:24px;flex:none}
+  .sw .sw-txt{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+  .sw .sw-name{font-size:15px;font-weight:700}
+  .sw .sw-state{font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--bad)}
+  .sw .sw-track{flex:none;position:relative;width:46px;height:28px;border-radius:14px;background:#3a414d;transition:background .2s}
+  .sw .sw-knob{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#c9ced6;transition:left .2s,background .2s}
+  .sw.is-on{border-color:var(--ok);background:rgba(62,207,142,.15)}
+  .sw.is-on .sw-state{color:var(--ok)}
+  .sw.is-on .sw-track{background:var(--ok)}
+  .sw.is-on .sw-knob{left:21px;background:#fff}
+  .sw.is-warn{border-color:var(--warn);background:rgba(245,184,75,.12)}
+  .sw.is-warn .sw-state{color:var(--warn)}
+  #fsSound.is-on{background:var(--ok);color:#06140d;border-color:transparent}
+  #fsSound.is-off{border:2px solid var(--bad);background:rgba(255,93,93,.18)}
   .tags{display:flex;gap:8px;flex-wrap:wrap}
   .tag{font-size:13px;padding:6px 10px;border-radius:999px;background:#232a35}
   .tag.hot{background:var(--bad);color:#fff}
@@ -163,6 +182,7 @@
   #fsBar{display:none;position:absolute;left:0;right:0;bottom:0;z-index:4;flex-direction:column;gap:10px;
     padding:28px 12px calc(var(--sb) + 12px);background:linear-gradient(transparent,rgba(0,0,0,.8));transition:opacity .3s}
   #fsBar .row button{flex:none;min-width:56px;font-size:20px;padding:14px}
+  #fsBar #fsSound{font-size:14px;font-weight:800;min-width:84px}
   #fsBar #fsTalk{flex:1;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:8px;padding-right:8px}
   body.fs #fsBar{display:flex}
   body.fs #stage{position:fixed;inset:0;height:auto;z-index:40}
@@ -233,7 +253,7 @@
     <video id="remoteVideo" playsinline autoplay muted></video>
     <canvas id="nvCanvas"></canvas>
     <div id="flash"></div>
-    <div id="tapSound"><span>🔇 Ton ist aus – unten „Ton an“ tippen</span></div>
+    <div id="tapSound"><span>🔇 Live-Ton ist AUS – unten einschalten</span></div>
     <div id="monTop">
       <span class="pill"><span id="monDot" class="dot"></span><span id="monStatus">Startet…</span><span id="netBadge"></span></span>
       <span class="pill" id="monCode"></span>
@@ -243,9 +263,9 @@
     <div id="fsBar">
       <div class="meter"><i id="fsMeter"></i><b id="fsThr"></b></div>
       <div class="row">
-        <button id="fsSound" title="Ton">🔇</button>
+        <button id="fsSound" title="Live-Ton" class="is-off">🔇 AUS</button>
         <button id="fsNv" title="Nachtsicht">🌙</button>
-        <button id="fsTalk">🎙️ Halten zum Sprechen</button>
+        <button id="fsTalk">🎙️ Sprechen</button>
         <button id="fsExit" title="Vollbild beenden">✕</button>
       </div>
     </div>
@@ -262,9 +282,17 @@
     <div class="tags" id="monTags"></div>
     <div class="hint" id="pathInfo">Verbindungsweg: wird geprüft…</div>
 
-    <div class="grid2">
-      <button id="soundBtn">🔇 Ton an</button>
-      <button id="alarmBtn">🔔 Alarm-Ton</button>
+    <div class="swstack">
+      <button id="soundBtn" class="sw" role="switch" aria-checked="false">
+        <span class="sw-ico">🔇</span>
+        <span class="sw-txt"><span class="sw-name">Live-Ton</span><span class="sw-state">AUS</span></span>
+        <span class="sw-track"><span class="sw-knob"></span></span>
+      </button>
+      <button id="alarmBtn" class="sw" role="switch" aria-checked="false">
+        <span class="sw-ico">🔕</span>
+        <span class="sw-txt"><span class="sw-name">Alarm-Ton</span><span class="sw-state">AUS</span></span>
+        <span class="sw-track"><span class="sw-knob"></span></span>
+      </button>
     </div>
     <button id="talkBtn">🎙️ Gedrückt halten zum Sprechen</button>
     <button id="fsBtn">⛶ Vollbild</button>
@@ -1064,18 +1092,33 @@
   window.addEventListener('resize', () => { if (role === 'mon') layoutVideo(); });
 
   function applyThreshold() { $('thr').value = threshold; $('thrVal').textContent = threshold; $('thrMark').style.left = threshold + '%'; $('fsThr').style.left = threshold + '%'; }
-  function applyAlarmBtn() { $('alarmBtn').textContent = alarmOn ? '🔔 Alarm-Ton an' : '🔕 Alarm-Ton aus'; $('alarmBtn').classList.toggle('on', alarmOn); }
+  // Schalter zeichnen: zeigt immer den ZUSTAND (AN/AUS), nie die Aktion
+  function setSwitch(id, on, icon, stateText, warn) {
+    const b = $(id);
+    b.classList.toggle('is-on', on);
+    b.classList.toggle('is-warn', !on && !!warn);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+    b.querySelector('.sw-ico').textContent = icon;
+    b.querySelector('.sw-state').textContent = stateText;
+  }
+  function applySwitches() {
+    setSwitch('soundBtn', soundOn, soundOn ? '🔊' : '🔇', soundOn ? 'AN · du hörst mit' : 'AUS · stumm');
+    setSwitch('alarmBtn', alarmOn, alarmOn ? '🔔' : '🔕',
+      !alarmOn ? 'AUS · kein Piepton!' : (soundOn ? 'AN · ruht, solange Live-Ton an' : 'AN · piept bei Geräusch'),
+      true); // AUS beim Alarm = Warnfarbe, weil sicherheitsrelevant
+    const f = $('fsSound');
+    f.textContent = soundOn ? '🔊 AN' : '🔇 AUS';
+    f.classList.toggle('is-on', soundOn); f.classList.toggle('is-off', !soundOn);
+    $('tapSound').classList.toggle('hide', soundOn);
+  }
+  function applyAlarmBtn() { applySwitches(); }
   $('thr').oninput = e => { threshold = parseInt(e.target.value, 10); store('bp_thr', threshold); applyThreshold(); };
   $('alarmBtn').onclick = () => { makeAudioCtx(); alarmOn = !alarmOn; store('bp_alarm', alarmOn ? '1' : '0'); applyAlarmBtn(); if (alarmOn) beep(880, 0.15, 1); };
   function toggleSound() {
     makeAudioCtx();
     soundOn = !soundOn;
     const v = $('remoteVideo'); v.muted = !soundOn || talking; v.play().catch(() => {});
-    $('soundBtn').textContent = soundOn ? '🔊 Ton aus' : '🔇 Ton an';
-    $('soundBtn').classList.toggle('on', soundOn);
-    $('fsSound').textContent = soundOn ? '🔊' : '🔇';
-    $('fsSound').classList.toggle('on', soundOn);
-    $('tapSound').style.display = soundOn ? 'none' : 'flex';
+    applySwitches();
   }
   $('soundBtn').onclick = toggleSound;
   $('fsSound').onclick = e => { e.stopPropagation(); toggleSound(); showCtl(); };
@@ -1085,7 +1128,7 @@
   function setTalkUI(active) {
     $('talkBtn').classList.toggle('active', active); $('fsTalk').classList.toggle('active', active);
     $('talkBtn').textContent = active ? '🎙️ Du sprichst – loslassen zum Beenden' : '🎙️ Gedrückt halten zum Sprechen';
-    $('fsTalk').textContent = active ? '🎙️ Du sprichst…' : '🎙️ Halten zum Sprechen';
+    $('fsTalk').textContent = active ? '🎙️ Spricht…' : '🎙️ Sprechen';
   }
   function resetTalkBtn() { setTalkUI(false); }
   async function talkStart(e) {
