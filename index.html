@@ -38,6 +38,21 @@
     var sdp = d.sdp.split('\r\n').filter(function (l) { return l.indexOf('a=candidate:') !== 0 || candOk(l); }).join('\r\n');
     return { type: d.type, sdp: sdp };
   }
+  // H.264 bevorzugen: iPhones kodieren es mit Hardwarechip → bessere Qualität bei gleicher Datenrate
+  // und weniger Auflösungsabsenkung (VP8 läuft auf dem iPhone nur in Software).
+  function preferH264(sdp) {
+    var lines = sdp.split('\r\n'), mi = -1, i;
+    for (i = 0; i < lines.length; i++) if (lines[i].indexOf('m=video') === 0) { mi = i; break; }
+    if (mi < 0) return sdp;
+    var h = {};
+    lines.forEach(function (l) { var m = l.match(/^a=rtpmap:(\d+) H264\/90000/i); if (m) h[m[1]] = 1; });
+    var parts = lines[mi].split(' '), head = parts.slice(0, 3), pts = parts.slice(3);
+    var pref = pts.filter(function (x) { return h[x]; }), rest = pts.filter(function (x) { return !h[x]; });
+    if (!pref.length) return sdp;
+    lines[mi] = head.concat(pref, rest).join(' ');
+    return lines.join('\r\n');
+  }
+  function local(d) { var f = filterSdp(d); if (f && f.sdp) f.sdp = preferH264(f.sdp); return f; }
   class LanPC extends Native {
     constructor(cfg) {
       var c = Object.assign({}, cfg || {}); c.iceServers = [];
@@ -57,8 +72,8 @@
       }
       return Native.prototype.addEventListener.call(this, type, fn, opt);
     }
-    createOffer(o) { return Native.prototype.createOffer.call(this, o).then(filterSdp); }
-    createAnswer(o) { return Native.prototype.createAnswer.call(this, o).then(filterSdp); }
+    createOffer(o) { return Native.prototype.createOffer.call(this, o).then(local); }
+    createAnswer(o) { return Native.prototype.createAnswer.call(this, o).then(local); }
     setLocalDescription(d) { return d ? Native.prototype.setLocalDescription.call(this, filterSdp(d)) : Native.prototype.setLocalDescription.call(this); }
     setRemoteDescription(d) { return Native.prototype.setRemoteDescription.call(this, filterSdp(d)); }
     addIceCandidate(c) {
@@ -281,6 +296,7 @@
     </div>
     <div class="tags" id="monTags"></div>
     <div class="hint" id="pathInfo">Verbindungsweg: wird geprüft…</div>
+    <div class="hint" id="videoInfo"></div>
 
     <div class="swstack">
       <button id="soundBtn" class="sw" role="switch" aria-checked="false">
@@ -313,6 +329,14 @@
         <div>
           <label for="brightRange">Bild aufhellen (nur hier am Monitor): <span id="brightVal"></span></label>
           <input id="brightRange" type="range" min="100" max="300" step="10" value="100">
+        </div>
+        <div>
+          <label for="qualSel">Bildqualität der Kamera</label>
+          <select id="qualSel">
+            <option value="720">720p · Nacht (empfohlen für Nachtsicht)</option>
+            <option value="1080">1080p · Tag (schärfer bei gutem Licht)</option>
+          </select>
+          <p class="hint" style="margin:4px 0 0" id="qualInfo">Im Dunkeln ist 720p meist besser: mehr Datenrate pro Bildpunkt, weniger Rauschen.</p>
         </div>
         <button id="rotBtn">↻ Bild drehen</button>
       </div>
@@ -460,12 +484,18 @@
   let noiseSrc = null, noiseGain = null, noiseTimer = null;
   const monitors = new Map();
   const IOS_VER = (() => { const m = navigator.userAgent.match(/OS (\d+)[_.](\d+)/); return m && /iPhone|iPad|iPod/.test(navigator.userAgent) ? parseFloat(m[1] + '.' + m[2]) : 0; })();
-  const cs = { torch: false, torchAvail: false, torchConfirmed: false, torchErr: '', ios: IOS_VER, facing: '', light: 0, noise: 'off', noiseVol: 40, noiseMin: 30, noiseEnds: 0, lowlight: false, talk: false };
+  const cs = { torch: false, torchAvail: false, torchConfirmed: false, torchErr: '', ios: IOS_VER, facing: '', quality: (load('bp_quality') === '1080' ? '1080' : '720'), capRes: '', light: 0, noise: 'off', noiseVol: 40, noiseMin: 30, noiseEnds: 0, lowlight: false, talk: false };
   const camStatus = (t, c) => setStatus('camDot', 'camStatus', t, c);
 
+  // Qualitätsstufen: 720p (Nacht – mehr Datenrate pro Bildpunkt, Sensor fasst Pixel zusammen) / 1080p (Tag)
+  const QUALITY = {
+    '720':  { w: 1280, h: 720,  fps: 20, maxBitrate: 4000000 },
+    '1080': { w: 1920, h: 1080, fps: 30, maxBitrate: 6000000 }
+  };
   function videoConstraints(withFacing) {
-    const c = { width: { ideal: 1280 }, height: { ideal: 720 },
-      frameRate: cs.lowlight ? { ideal: 10, max: 12 } : { ideal: 20, max: 30 } };
+    const q = QUALITY[cs.quality] || QUALITY['720'];
+    const c = { width: { ideal: q.w }, height: { ideal: q.h },
+      frameRate: cs.lowlight ? { ideal: 10, max: 12 } : { ideal: q.fps, max: 30 } };
     if (withFacing) c.facingMode = { ideal: facing };
     return c;
   }
@@ -551,7 +581,32 @@
   setInterval(() => {
     if (role !== 'cam') return;
     for (const [id, m] of monitors) if (Date.now() - m.lastSeen > 6000) dropMonitor(id);
+    for (const m of monitors.values()) tuneSender(m);
   }, 1000);
+  // Höhere Datenrate erlauben: Standardwerte sind fürs Internet gedacht, im WLAN ist viel mehr Platz.
+  // Mehr Bits pro Bildpunkt = dunkle Details und feines Rauschen überleben die Kompression (wichtig für die Nachtsicht).
+  async function tuneSender(m) {
+    const want = cs.quality;
+    if (m.tuned === want || m.tuning) return;
+    const pc = m.call && m.call.peerConnection;
+    if (!pc || pc.connectionState === 'new' || pc.connectionState === 'connecting') return;
+    const sender = pc.getSenders().find(x => x.track && x.track.kind === 'video');
+    if (!sender || !sender.getParameters) return;
+    m.tuning = true;
+    try {
+      const prm = sender.getParameters();
+      if (!prm.encodings || !prm.encodings.length) return;
+      const q = QUALITY[want];
+      prm.encodings[0].maxBitrate = q.maxBitrate;
+      prm.encodings[0].maxFramerate = q.fps;
+      try { prm.degradationPreference = 'maintain-resolution'; } catch (e) {}
+      await sender.setParameters(prm);
+      m.tuned = want;
+    } catch (e) {
+      console.warn('setParameters', e);
+      m.tuned = want; // nicht endlos erneut versuchen
+    } finally { m.tuning = false; }
+  }
   function dropIf(id, m) { if (m && monitors.get(id) === m) dropMonitor(id); }
   function dropMonitor(id) {
     const m = monitors.get(id); if (!m) return;
@@ -579,6 +634,18 @@
   async function onCmd(d) {
     if ('torch' in d) { cs.torch = !!d.torch; cs.torchErr = ''; await applyVideo(); }
     if ('lowlight' in d) { cs.lowlight = !!d.lowlight; await applyVideo(); }
+    if ('quality' in d && QUALITY[d.quality] && d.quality !== cs.quality) {
+      cs.quality = d.quality; store('bp_quality', cs.quality);
+      await applyVideo();
+      // Manche iPhones ignorieren eine Auflösungsänderung am laufenden Stream → dann Kamera neu starten
+      const want = QUALITY[cs.quality];
+      try {
+        const st1 = stream.getVideoTracks()[0].getSettings();
+        if (st1.width && Math.max(st1.width, st1.height) < Math.max(want.w, want.h) * 0.9 && cs.quality === '1080') await restartStream();
+        if (st1.width && Math.max(st1.width, st1.height) > Math.max(want.w, want.h) * 1.1 && cs.quality === '720') await restartStream();
+      } catch (e) {}
+      for (const m of monitors.values()) m.tuned = '';
+    }
     if ('light' in d) setLight(+d.light || 0);
     if ('noise' in d) setNoise(String(d.noise), +d.vol, +d.minutes);
     if ('talk' in d) cs.talk = !!d.talk;
@@ -609,6 +676,7 @@
         catch (e2) { cs.torch = false; cs.torchErr = e2.name || 'Fehler'; try { await vt.applyConstraints(videoConstraints(false)); } catch (__) {} }
       }
     }
+    try { const st0 = vt.getSettings(); if (st0.width) cs.capRes = st0.width + '×' + st0.height; } catch (e) {}
     // getSettings().torch ist unter iOS 18 fehlerhaft (meldet „aus“, obwohl an) → nur nutzen, wenn der Browser den Blitz offiziell meldet
     if (capsTorch) { try { const st = vt.getSettings(); if (typeof st.torch === 'boolean') cs.torch = st.torch; } catch (e) {} }
   }
@@ -686,6 +754,7 @@
     if (cs.torch) tags.push('<span class="tag">🔦 Blitz an</span>');
     if (cs.light > 0) tags.push('<span class="tag">💡 Nachtlicht ' + cs.light + ' %</span>');
     if (cs.lowlight) tags.push('<span class="tag">🌙 Dunkel-Modus</span>');
+    tags.push('<span class="tag">📐 ' + (cs.quality === '1080' ? '1080p Tag' : '720p Nacht') + (cs.capRes ? ' · ' + cs.capRes : '') + '</span>');
     if (cs.noise !== 'off') tags.push('<span class="tag">🌊 Rauschen' + (cs.noiseEnds ? ' bis ' + new Date(cs.noiseEnds).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '') + '</span>');
     $('camTags').innerHTML = tags.join('');
   }
@@ -841,7 +910,7 @@
     const tc = talkCall; talkCall = null; try { tc && tc.close(); } catch (e) {}
     if (talking) talkStop();
     $('monMeter').style.width = '0%'; $('fsMeter').style.width = '0%';
-    $('netBadge').textContent = ''; $('pathInfo').textContent = 'Verbindungsweg: wird geprüft…';
+    $('netBadge').textContent = ''; $('pathInfo').textContent = 'Verbindungsweg: wird geprüft…'; $('videoInfo').textContent = ''; lastBytesAt = 0;
     monStatus(reason + ' – verbinde neu…', 'bad');
     if (everConnected) setLost(true, reason);
     scheduleRetry(2000);
@@ -888,6 +957,22 @@
       : '⚠️ Verbindungsweg unklar (' + (l.candidateType || '?') + '/' + (rm.candidateType || '?') + ')';
   }
 
+  // Empfangene Videoqualität anzeigen (zum Vergleich zwischen Geräten)
+  let lastBytes = 0, lastBytesAt = 0;
+  function showVideoInfo(st, r) {
+    const codec = r.codecId && st.get ? st.get(r.codecId) : null;
+    const name = codec && codec.mimeType ? codec.mimeType.replace(/^video\//, '') : '?';
+    const now = performance.now();
+    let rate = '';
+    if (r.bytesReceived != null) {
+      if (lastBytesAt && r.bytesReceived >= lastBytes) rate = ((r.bytesReceived - lastBytes) * 8 / ((now - lastBytesAt) / 1000) / 1e6).toFixed(1).replace('.', ',') + ' Mbit/s';
+      lastBytes = r.bytesReceived; lastBytesAt = now;
+    }
+    const res = r.frameWidth ? r.frameWidth + '×' + r.frameHeight : ($('remoteVideo').videoWidth + '×' + $('remoteVideo').videoHeight);
+    const fps = r.framesPerSecond != null ? Math.round(r.framesPerSecond) + ' fps' : '';
+    $('videoInfo').textContent = '🎥 Empfang: ' + [res, fps, name, rate].filter(Boolean).join(' · ');
+  }
+
   // Bild eingefroren? (Datenkanal lebt, aber keine neuen Videobilder)
   async function checkMedia() {
     if (!connected || statsBusy) return;
@@ -896,13 +981,15 @@
     statsBusy = true;
     try {
       const st = await pc.getStats();
-      let f = null;
+      let f = null, vin = null;
       st.forEach(r => {
         if (r.type === 'inbound-rtp' && (r.kind === 'video' || r.mediaType === 'video')) {
+          vin = r;
           f = r.framesDecoded != null ? r.framesDecoded : (r.framesReceived != null ? r.framesReceived : f);
         }
       });
       showPath(st);
+      if (vin) showVideoInfo(st, vin);
       if (f !== null) {
         if (f !== lastFrames) { lastFrames = f; lastFrameAt = Date.now(); }
         else if (lastFrameAt && Date.now() - lastFrameAt > 8000) lostConnection('Bild eingefroren');
@@ -987,10 +1074,16 @@
     if (s.torch) tags.push('<span class="tag">🔦 Blitz an</span>');
     if (s.light > 0) tags.push('<span class="tag">💡 Nachtlicht ' + s.light + ' %</span>');
     if (s.noise !== 'off') tags.push('<span class="tag">🌊 Rauschen</span>');
+    if (s.quality) {
+      $('qualSel').value = s.quality;
+      $('qualInfo').textContent = 'Kamera nimmt auf mit ' + (s.capRes || '?') + ' · ' + (s.quality === '1080' ? 'bis 6 Mbit/s' : 'bis 4 Mbit/s') +
+        '. Im Dunkeln ist 720p meist besser: mehr Datenrate pro Bildpunkt, weniger Rauschen.';
+    }
     $('monTags').innerHTML = tags.join('');
   }
 
   // --- Steuerung ---
+  $('qualSel').onchange = e => { if (sendCmd({ quality: e.target.value })) toast('Kamera stellt um auf ' + e.target.value + 'p…'); };
   $('torchBtn').onclick = () => sendCmd({ torch: !(camState && camState.torch) });
 
   const sendLight = throttle(v => sendCmd({ light: v }), 250);
@@ -1011,7 +1104,10 @@
   // 1. Rauschen mitteln: jedes neue Bild fließt nur zu 25 % ein (gleitender Mittelwert, in Fließkomma – keine Rundungsverluste).
   // 2. Automatische Verstärkung: Bild wird auf eine Zielhelligkeit gebracht (Regler „Bild aufhellen“ verschiebt das Ziel).
   // 3. Dunkle Töne anheben (Gamma) und Farbe dämpfen, weil Farbrauschen im Dunkeln am meisten stört.
-  const NV_W = 480;
+  // Rechenauflösung passt sich an: so groß wie das Bild am Bildschirm wirklich dargestellt wird (inkl. Retina-Faktor),
+  // höchstens Videoauflösung, und gedeckelt durch die Rechenleistung (wird laufend gemessen und nachgeregelt).
+  const NV_BASECAP = (window.matchMedia && matchMedia('(pointer: coarse)').matches) ? 720 : 1280; // Handy / PC (längere Bildseite)
+  let nvCap = NV_BASECAP, nvMs = 0, nvLastAdj = 0;
   const NV_DEF = { a: 25, t: 75, g: 70 }; // Standard: α = 0,25 · Ziel 75 · Gamma 0,70
   let nvA = +(load('bp_nva') || NV_DEF.a), nvT = +(load('bp_nvt') || NV_DEF.t), nvG = +(load('bp_nvg') || NV_DEF.g);
   let NV_GAMMA = new Uint8Array(256), nvTick = 0;
@@ -1021,7 +1117,11 @@
   function nvStep() {
     const v = $('remoteVideo'), c = $('nvCanvas');
     if (!v.videoWidth || v.readyState < 2) return;
-    const sc = Math.min(1, NV_W / v.videoWidth);
+    const t0 = performance.now();
+    const st = $('stage'), dpr = window.devicePixelRatio || 1;
+    const vLong = Math.max(v.videoWidth, v.videoHeight);
+    const shown = Math.max(st.clientWidth, st.clientHeight) * dpr;   // tatsächliche Pixel am Bildschirm
+    const sc = Math.min(1, nvCap / vLong, Math.max(240, shown) / vLong);
     const w = Math.round(v.videoWidth * sc), h = Math.round(v.videoHeight * sc);
     if (!nvWork) nvWork = document.createElement('canvas');
     if (nvWork.width !== w || nvWork.height !== h || !nvWctx) {
@@ -1046,9 +1146,18 @@
       d[i + 2] = NV_GAMMA[Math.min(255, (L + (b - L) * 0.35) | 0)];
     }
     c.getContext('2d').putImageData(img, 0, 0);
+    // Rechenzeit messen; zu langsam → Auflösung senken, viel Luft → wieder anheben (höchstens alle 3 s)
+    const ms = performance.now() - t0;
+    nvMs = nvMs ? nvMs + (ms - nvMs) * 0.1 : ms;
+    const now = Date.now();
+    if (now - nvLastAdj > 3000) {
+      if (nvMs > 40 && nvCap > 320) { nvCap = Math.max(320, Math.round(nvCap * 0.8)); nvLastAdj = now; }
+      else if (nvMs < 15 && nvCap < NV_BASECAP) { nvCap = Math.min(NV_BASECAP, Math.round(nvCap * 1.15)); nvLastAdj = now; }
+    }
     if (++nvTick % 15 === 0) {
       $('nvLive').textContent = 'Live: Bildhelligkeit ' + Math.round(sum / cnt) + '/255 → Verstärkung ×' + g.toFixed(1).replace('.', ',') +
-        (g >= 15.9 ? ' (Maximum – zu dunkel, mehr Licht nötig)' : '');
+        (g >= 15.9 ? ' (Maximum – zu dunkel, mehr Licht nötig)' : '') +
+        ' · Rechenauflösung ' + w + '×' + h + ' · ' + Math.round(nvMs) + ' ms/Bild';
     }
   }
   function applyNv() {
