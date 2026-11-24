@@ -294,6 +294,7 @@
   </div>
 
   <div id="monPanel">
+    <button id="fsBtn">⛶ Vollbild</button>
     <div>
       <div class="row" style="justify-content:space-between;margin-bottom:6px">
         <label style="margin:0">Geräuschpegel</label>
@@ -318,7 +319,6 @@
       </button>
     </div>
     <button id="talkBtn">🎙️ Gedrückt halten zum Sprechen</button>
-    <button id="fsBtn">⛶ Vollbild</button>
 
     <details class="card">
       <summary>💡 Licht &amp; Bild</summary>
@@ -367,6 +367,11 @@
           <label for="nvGammaR">Schatten anheben (Gamma): <span id="nvGammaVal"></span></label>
           <input id="nvGammaR" type="range" min="40" max="100" step="5">
           <p class="hint" style="margin:4px 0 0">← kleiner: dunkle Bereiche deutlich heller (flauer) · 1,00: keine Anhebung →</p>
+        </div>
+        <div>
+          <label for="nvMaxR">Maximale Verstärkung: <span id="nvMaxVal"></span></label>
+          <input id="nvMaxR" type="range" min="8" max="64" step="4">
+          <p class="hint" style="margin:4px 0 0">Obergrenze für die Automatik. Hoch = auch fast völlige Dunkelheit wird aufgehellt (sehr rauschig) – am besten zusammen mit starker Mittelung (5–10 %). Bei genug Licht nutzt die Automatik ohnehin weniger.</p>
         </div>
         <button id="nvReset">Auf Standard zurücksetzen</button>
       </div>
@@ -1155,8 +1160,8 @@
   // höchstens Videoauflösung, und gedeckelt durch die Rechenleistung (wird laufend gemessen und nachgeregelt).
   const NV_BASECAP = (window.matchMedia && matchMedia('(pointer: coarse)').matches) ? 720 : 1280; // Handy / PC (längere Bildseite)
   let nvCap = NV_BASECAP, nvMs = 0, nvLastAdj = 0;
-  const NV_DEF = { a: 25, t: 75, g: 70 }; // Standard: α = 0,25 · Ziel 75 · Gamma 0,70
-  let nvA = +(load('bp_nva') || NV_DEF.a), nvT = +(load('bp_nvt') || NV_DEF.t), nvG = +(load('bp_nvg') || NV_DEF.g);
+  const NV_DEF = { a: 25, t: 75, g: 70, m: 48 }; // Standard: α = 0,25 · Ziel 75 · Gamma 0,70 · max. ×48
+  let nvA = +(load('bp_nva') || NV_DEF.a), nvT = +(load('bp_nvt') || NV_DEF.t), nvG = +(load('bp_nvg') || NV_DEF.g), nvM = +(load('bp_nvm') || NV_DEF.m);
   let NV_GAMMA = new Uint8Array(256), nvTick = 0;
   function buildGamma() { const g = nvG / 100; for (let i = 0; i < 256; i++) NV_GAMMA[i] = Math.round(255 * Math.pow(i / 255, g)); }
   buildGamma();
@@ -1183,7 +1188,7 @@
     let sum = 0, cnt = 0;
     for (let i = 0; i < n; i += 64) { sum += 0.299 * nvAcc[i] + 0.587 * nvAcc[i + 1] + 0.114 * nvAcc[i + 2]; cnt++; }
     const target = nvT * bright / 100;
-    nvGain += (clamp(target / Math.max(sum / cnt, 0.5), 1, 16) - nvGain) * 0.15;
+    nvGain += (clamp(target / Math.max(sum / cnt, 0.25), 1, nvM) - nvGain) * 0.15;
     const g = nvGain;
     for (let i = 0; i < n; i += 4) {
       const r = nvAcc[i] * g, gr = nvAcc[i + 1] * g, b = nvAcc[i + 2] * g;
@@ -1203,7 +1208,7 @@
     }
     if (++nvTick % 15 === 0) {
       $('nvLive').textContent = 'Live: Bildhelligkeit ' + Math.round(sum / cnt) + '/255 → Verstärkung ×' + g.toFixed(1).replace('.', ',') +
-        (g >= 15.9 ? ' (Maximum – zu dunkel, mehr Licht nötig)' : '') +
+        (g >= nvM * 0.98 ? ' (Maximum ×' + nvM + ' – zu dunkel, mehr Licht nötig)' : '') +
         ' · Rechenauflösung ' + w + '×' + h + ' · ' + Math.round(nvMs) + ' ms/Bild';
     }
   }
@@ -1221,13 +1226,15 @@
     $('nvAlphaR').value = nvA; $('nvAlphaVal').textContent = fmtA(nvA) + ' · ≈ ' + (100 / nvA / 15).toFixed(2).replace('.', ',') + ' s Nachzieh-Zeit';
     $('nvTargetR').value = nvT; $('nvTargetVal').textContent = nvT + ' / 255';
     $('nvGammaR').value = nvG; $('nvGammaVal').textContent = (nvG / 100).toFixed(2).replace('.', ',');
+    $('nvMaxR').value = nvM; $('nvMaxVal').textContent = '×' + nvM;
   }
   $('nvAlphaR').addEventListener('input', e => { nvA = +e.target.value; store('bp_nva', nvA); applyNvTune(); });
   $('nvTargetR').addEventListener('input', e => { nvT = +e.target.value; store('bp_nvt', nvT); applyNvTune(); });
   $('nvGammaR').addEventListener('input', e => { nvG = +e.target.value; store('bp_nvg', nvG); buildGamma(); applyNvTune(); });
+  $('nvMaxR').addEventListener('input', e => { nvM = +e.target.value; store('bp_nvm', nvM); applyNvTune(); });
   $('nvReset').onclick = () => {
-    nvA = NV_DEF.a; nvT = NV_DEF.t; nvG = NV_DEF.g;
-    store('bp_nva', nvA); store('bp_nvt', nvT); store('bp_nvg', nvG);
+    nvA = NV_DEF.a; nvT = NV_DEF.t; nvG = NV_DEF.g; nvM = NV_DEF.m;
+    store('bp_nva', nvA); store('bp_nvt', nvT); store('bp_nvg', nvG); store('bp_nvm', nvM);
     buildGamma(); applyNvTune(); toast('Nachtsicht auf Standard zurückgesetzt');
   };
   function toggleNv() { nvOn = !nvOn; store('bp_nv', nvOn ? '1' : '0'); applyNv(); }
