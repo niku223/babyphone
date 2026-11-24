@@ -52,7 +52,14 @@
     lines[mi] = head.concat(pref, rest).join(' ');
     return lines.join('\r\n');
   }
-  function local(d) { var f = filterSdp(d); if (f && f.sdp) f.sdp = preferH264(f.sdp); return f; }
+  // H.264 „Level“ 3.1 (…1f) erlaubt laut Standard höchstens 1280×720. Hardware-Kodierer (iPhone) halten sich daran
+  // und liefern bei 1080p dann gar nichts. → auf Level 4.0 (…28) anheben, das 1920×1080 mit 30 Bildern/s erlaubt.
+  function raiseH264Level(sdp) {
+    return sdp.replace(/(a=fmtp:\d+ [^\r\n]*profile-level-id=)([0-9a-fA-F]{4})([0-9a-fA-F]{2})/g, function (m, pre, prof, lvl) {
+      return parseInt(lvl, 16) < 0x28 ? pre + prof + '28' : m;
+    });
+  }
+  function local(d) { var f = filterSdp(d); if (f && f.sdp) f.sdp = raiseH264Level(preferH264(f.sdp)); return f; }
   class LanPC extends Native {
     constructor(cfg) {
       var c = Object.assign({}, cfg || {}); c.iceServers = [];
@@ -484,7 +491,7 @@
   let noiseSrc = null, noiseGain = null, noiseTimer = null;
   const monitors = new Map();
   const IOS_VER = (() => { const m = navigator.userAgent.match(/OS (\d+)[_.](\d+)/); return m && /iPhone|iPad|iPod/.test(navigator.userAgent) ? parseFloat(m[1] + '.' + m[2]) : 0; })();
-  const cs = { torch: false, torchAvail: false, torchConfirmed: false, torchErr: '', ios: IOS_VER, facing: '', quality: (load('bp_quality') === '1080' ? '1080' : '720'), capRes: '', light: 0, noise: 'off', noiseVol: 40, noiseMin: 30, noiseEnds: 0, lowlight: false, talk: false };
+  const cs = { torch: false, torchAvail: false, torchConfirmed: false, torchErr: '', ios: IOS_VER, facing: '', qualityErr: '', quality: (load('bp_quality') === '1080' ? '1080' : '720'), capRes: '', light: 0, noise: 'off', noiseVol: 40, noiseMin: 30, noiseEnds: 0, lowlight: false, talk: false };
   const camStatus = (t, c) => setStatus('camDot', 'camStatus', t, c);
 
   // Qualitätsstufen: 720p (Nacht – mehr Datenrate pro Bildpunkt, Sensor fasst Pixel zusammen) / 1080p (Tag)
@@ -581,8 +588,40 @@
   setInterval(() => {
     if (role !== 'cam') return;
     for (const [id, m] of monitors) if (Date.now() - m.lastSeen > 6000) dropMonitor(id);
-    for (const m of monitors.values()) tuneSender(m);
+    for (const m of monitors.values()) { tuneSender(m); checkOutbound(m); }
   }, 1000);
+  // Kodiert die Kamera bei 1080p keine Bilder mehr (z. B. weil der Hardware-Kodierer das ablehnt),
+  // geht sie nach 6 s automatisch zurück auf 720p und meldet das dem Monitor.
+  let qualityChangedAt = 0;
+  async function checkOutbound(m) {
+    const pc = m.call && m.call.peerConnection;
+    if (!pc || m.statBusy || pc.connectionState !== 'connected') return;
+    m.statBusy = true;
+    try {
+      const st = await pc.getStats();
+      let enc = null;
+      st.forEach(r => {
+        if (r.type === 'outbound-rtp' && (r.kind === 'video' || r.mediaType === 'video')) {
+          const v = r.framesEncoded != null ? r.framesEncoded : r.packetsSent;
+          if (v != null) enc = (enc || 0) + v;
+        }
+      });
+      if (enc === null) return;
+      const now = Date.now();
+      if (enc !== m.lastEnc) { m.lastEnc = enc; m.lastEncAt = now; return; }
+      if (!m.lastEncAt) m.lastEncAt = now;
+      if (cs.quality === '1080' && now - m.lastEncAt > 6000 && now - qualityChangedAt > 6000) {
+        cs.quality = '720'; store('bp_quality', '720');
+        cs.qualityErr = '1080p liefert auf diesem Kamera-iPhone kein Bild – automatisch zurück auf 720p.';
+        qualityChangedAt = now;
+        await applyVideo();
+        await restartStream();
+        for (const mm of monitors.values()) { mm.tuned = ''; mm.lastEncAt = 0; }
+        sendState();
+      }
+    } catch (e) {} finally { m.statBusy = false; }
+  }
+
   // Höhere Datenrate erlauben: Standardwerte sind fürs Internet gedacht, im WLAN ist viel mehr Platz.
   // Mehr Bits pro Bildpunkt = dunkle Details und feines Rauschen überleben die Kompression (wichtig für die Nachtsicht).
   async function tuneSender(m) {
@@ -636,6 +675,8 @@
     if ('lowlight' in d) { cs.lowlight = !!d.lowlight; await applyVideo(); }
     if ('quality' in d && QUALITY[d.quality] && d.quality !== cs.quality) {
       cs.quality = d.quality; store('bp_quality', cs.quality);
+      cs.qualityErr = ''; qualityChangedAt = Date.now() - 0; // Messung startet neu
+      for (const m of monitors.values()) m.lastEncAt = Date.now();
       await applyVideo();
       // Manche iPhones ignorieren eine Auflösungsänderung am laufenden Stream → dann Kamera neu starten
       const want = QUALITY[cs.quality];
@@ -958,7 +999,7 @@
   }
 
   // Empfangene Videoqualität anzeigen (zum Vergleich zwischen Geräten)
-  let lastBytes = 0, lastBytesAt = 0;
+  let lastBytes = 0, lastBytesAt = 0, qualGraceUntil = 0, lastQualErr = '';
   function showVideoInfo(st, r) {
     const codec = r.codecId && st.get ? st.get(r.codecId) : null;
     const name = codec && codec.mimeType ? codec.mimeType.replace(/^video\//, '') : '?';
@@ -992,7 +1033,7 @@
       if (vin) showVideoInfo(st, vin);
       if (f !== null) {
         if (f !== lastFrames) { lastFrames = f; lastFrameAt = Date.now(); }
-        else if (lastFrameAt && Date.now() - lastFrameAt > 8000) lostConnection('Bild eingefroren');
+        else if (lastFrameAt && Date.now() - lastFrameAt > 8000 && Date.now() > qualGraceUntil) lostConnection('Bild eingefroren');
       }
     } catch (e) {} finally { statsBusy = false; }
   }
@@ -1074,16 +1115,22 @@
     if (s.torch) tags.push('<span class="tag">🔦 Blitz an</span>');
     if (s.light > 0) tags.push('<span class="tag">💡 Nachtlicht ' + s.light + ' %</span>');
     if (s.noise !== 'off') tags.push('<span class="tag">🌊 Rauschen</span>');
+    if (s.qualityErr && s.qualityErr !== lastQualErr) { toast('⚠️ ' + s.qualityErr, 8000); }
+    lastQualErr = s.qualityErr || '';
     if (s.quality) {
       $('qualSel').value = s.quality;
-      $('qualInfo').textContent = 'Kamera nimmt auf mit ' + (s.capRes || '?') + ' · ' + (s.quality === '1080' ? 'bis 6 Mbit/s' : 'bis 4 Mbit/s') +
+      $('qualInfo').textContent = (s.qualityErr ? '⚠️ ' + s.qualityErr + ' ' : '') + 'Kamera nimmt auf mit ' + (s.capRes || '?') + ' · ' + (s.quality === '1080' ? 'bis 6 Mbit/s' : 'bis 4 Mbit/s') +
         '. Im Dunkeln ist 720p meist besser: mehr Datenrate pro Bildpunkt, weniger Rauschen.';
     }
     $('monTags').innerHTML = tags.join('');
   }
 
   // --- Steuerung ---
-  $('qualSel').onchange = e => { if (sendCmd({ quality: e.target.value })) toast('Kamera stellt um auf ' + e.target.value + 'p…'); };
+  $('qualSel').onchange = e => {
+    // Umstellen dauert ein paar Sekunden; die Kamera fällt bei Problemen selbst auf 720p zurück → so lange kein Einfrier-Alarm
+    qualGraceUntil = Date.now() + 15000; lastFrameAt = Date.now();
+    if (sendCmd({ quality: e.target.value })) toast('Kamera stellt um auf ' + e.target.value + 'p…');
+  };
   $('torchBtn').onclick = () => sendCmd({ torch: !(camState && camState.torch) });
 
   const sendLight = throttle(v => sendCmd({ light: v }), 250);
