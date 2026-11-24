@@ -355,7 +355,7 @@
         <p class="hint" style="margin:0" id="nvLive">Nachtsicht ist aus – oben unter „Licht &amp; Bild“ einschalten, dann siehst du jede Änderung sofort.</p>
         <div>
           <label for="nvAlphaR">Mittelung: <span id="nvAlphaVal"></span></label>
-          <input id="nvAlphaR" type="range" min="5" max="60" step="5">
+          <input id="nvAlphaR" type="range" min="1" max="60" step="1">
           <p class="hint" style="margin:4px 0 0">← stärker: ruhiger, aber Bewegung verwischt · schwächer: schärfer, aber rauschiger →</p>
         </div>
         <div>
@@ -370,7 +370,7 @@
         </div>
         <div>
           <label for="nvMaxR">Maximale Verstärkung: <span id="nvMaxVal"></span></label>
-          <input id="nvMaxR" type="range" min="8" max="64" step="4">
+          <input id="nvMaxR" type="range" min="8" max="128" step="4">
           <p class="hint" style="margin:4px 0 0">Obergrenze für die Automatik. Hoch = auch fast völlige Dunkelheit wird aufgehellt (sehr rauschig) – am besten zusammen mit starker Mittelung (5–10 %). Bei genug Licht nutzt die Automatik ohnehin weniger.</p>
         </div>
         <button id="nvReset">Auf Standard zurücksetzen</button>
@@ -1221,9 +1221,12 @@
     if (nvOn) { nvAcc = null; nvTimer = setInterval(nvStep, 66); $('nvLive').textContent = 'Nachtsicht läuft – Messwerte folgen gleich…'; } // ~15 Bilder/s
     else $('nvLive').textContent = 'Nachtsicht ist aus – oben unter „Licht & Bild“ einschalten, dann siehst du jede Änderung sofort.';
   }
-  function fmtA(v) { return v + ' %' + (v <= 15 ? ' (stark)' : v >= 45 ? ' (schwach)' : ''); }
+  function fmtA(v) { return v + ' %' + (v <= 4 ? ' (sehr stark)' : v <= 15 ? ' (stark)' : v >= 45 ? ' (schwach)' : ''); }
   function applyNvTune() {
-    $('nvAlphaR').value = nvA; $('nvAlphaVal').textContent = fmtA(nvA) + ' · ≈ ' + (100 / nvA / 15).toFixed(2).replace('.', ',') + ' s Nachzieh-Zeit';
+    const lag = 100 / nvA / 15;
+    $('nvAlphaR').value = nvA;
+    $('nvAlphaVal').textContent = fmtA(nvA) + ' · ≈ ' + (lag < 1 ? lag.toFixed(2) : lag.toFixed(1)).replace('.', ',') + ' s Nachzieh-Zeit' +
+      (lag >= 3 ? ' ⚠️ Bewegungen erscheinen stark verzögert' : '');
     $('nvTargetR').value = nvT; $('nvTargetVal').textContent = nvT + ' / 255';
     $('nvGammaR').value = nvG; $('nvGammaVal').textContent = (nvG / 100).toFixed(2).replace('.', ',');
     $('nvMaxR').value = nvM; $('nvMaxVal').textContent = '×' + nvM;
